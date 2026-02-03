@@ -1,0 +1,107 @@
+# Backend Main Application
+# OceanValue API
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZIPMiddleware
+from contextlib import asynccontextmanager
+import logging
+import os
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Import routers
+from app.routers import hazards, data, analysis, reports
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Startup and shutdown events"""
+    logger.info("🚀 OceanValue Backend starting...")
+    
+    # Startup
+    # TODO: Load CLIMADA data
+    # TODO: Initialize cache
+    
+    yield
+    
+    # Shutdown
+    logger.info("🛑 OceanValue Backend shutting down...")
+
+# Create FastAPI app
+app = FastAPI(
+    title="OceanValue API",
+    description="Climate Risk Pricing Platform for Maritime Operations",
+    version="0.1.0",
+    docs_url="/api/docs",
+    openapi_url="/api/openapi.json",
+    lifespan=lifespan
+)
+
+# Middleware
+app.add_middleware(GZIPMiddleware, minimum_size=1000)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(","),
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Include routers
+app.include_router(hazards.router, prefix="/api/v1/hazards", tags=["Hazards"])
+app.include_router(data.router, prefix="/api/v1/data", tags=["Data"])
+app.include_router(analysis.router, prefix="/api/v1/analysis", tags=["Analysis"])
+app.include_router(reports.router, prefix="/api/v1/reports", tags=["Reports"])
+
+# Health check endpoint
+@app.get("/health", tags=["Health"])
+async def health_check():
+    """Health check endpoint"""
+    return {
+        "status": "ok",
+        "service": "OceanValue API",
+        "version": "0.1.0"
+    }
+
+# Root endpoint
+@app.get("/", tags=["Root"])
+async def root():
+    """Root endpoint with API info"""
+    return {
+        "message": "Welcome to OceanValue API",
+        "docs": "/api/docs",
+        "version": "0.1.0",
+        "endpoints": {
+            "hazards": "/api/v1/hazards",
+            "data": "/api/v1/data",
+            "analysis": "/api/v1/analysis",
+            "reports": "/api/v1/reports"
+        }
+    }
+
+# Error handlers
+@app.exception_handler(Exception)
+async def global_exception_handler(request, exc):
+    logger.error(f"Unhandled exception: {exc}", exc_info=True)
+    return {
+        "status": "error",
+        "message": "Internal server error",
+        "detail": str(exc)
+    }
+
+if __name__ == "__main__":
+    import uvicorn
+    
+    uvicorn.run(
+        app,
+        host="0.0.0.0",
+        port=int(os.getenv("PORT", 8000)),
+        reload=os.getenv("DEBUG", "False").lower() == "true"
+    )

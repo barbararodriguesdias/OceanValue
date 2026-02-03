@@ -1,0 +1,107 @@
+version: '3.9'
+
+services:
+  # PostgreSQL Database with PostGIS
+  postgres:
+    image: postgis/postgis:16-3.3
+    container_name: oceanvalue_postgres
+    environment:
+      POSTGRES_USER: oceanvalue_user
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-change_me_in_prod}
+      POSTGRES_DB: oceanvalue_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U oceanvalue_user -d oceanvalue_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - oceanvalue_network
+
+  # Redis Cache & Task Queue
+  redis:
+    image: redis:7-alpine
+    container_name: oceanvalue_redis
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - oceanvalue_network
+
+  # FastAPI Backend
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: oceanvalue_backend
+    environment:
+      DATABASE_URL: postgresql://oceanvalue_user:${DB_PASSWORD:-change_me_in_prod}@postgres:5432/oceanvalue_db
+      REDIS_URL: redis://redis:6379/0
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      DEBUG: ${DEBUG:-False}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+      - ./data:/app/data
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    networks:
+      - oceanvalue_network
+
+  # Celery Worker (opcional, comentado por padrão)
+  # celery_worker:
+  #   build:
+  #     context: ./backend
+  #     dockerfile: Dockerfile
+  #   container_name: oceanvalue_celery
+  #   command: celery -A app.tasks worker --loglevel=info
+  #   environment:
+  #     DATABASE_URL: postgresql://oceanvalue_user:${DB_PASSWORD:-change_me_in_prod}@postgres:5432/oceanvalue_db
+  #     REDIS_URL: redis://redis:6379/0
+  #   depends_on:
+  #     - redis
+  #     - postgres
+  #   volumes:
+  #     - ./backend:/app
+  #     - ./data:/app/data
+  #   networks:
+  #     - oceanvalue_network
+
+  # React Frontend (opcional para dev, comentado)
+  # frontend:
+  #   build:
+  #     context: ./frontend
+  #     dockerfile: Dockerfile
+  #   container_name: oceanvalue_frontend
+  #   ports:
+  #     - "3000:3000"
+  #   environment:
+  #     REACT_APP_API_URL: http://localhost:8000/api
+  #   command: npm start
+  #   volumes:
+  #     - ./frontend/src:/app/src
+  #   networks:
+  #     - oceanvalue_network
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  oceanvalue_network:
+    driver: bridge
