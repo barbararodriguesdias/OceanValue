@@ -28,6 +28,11 @@ body {
   overflow: hidden;
 }
 
+.main-container.content-scroll-mode {
+  overflow-y: auto;
+  align-items: flex-start;
+}
+
 .map-container {
   flex: 1;
   display: flex;
@@ -37,7 +42,7 @@ body {
 
 /* Header Styles */
 .header {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #006aba 0%, #d9dbe6 100%);
   color: white;
   padding: 1rem 2rem;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);

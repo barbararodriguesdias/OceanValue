@@ -1,5 +1,5 @@
-// OceanValue Backend __init__.py
-// Package initialization
+# OceanValue Backend __init__.py
+# Package initialization
 
 __version__ = "0.1.0"
 __author__ = "Barbara Dias"

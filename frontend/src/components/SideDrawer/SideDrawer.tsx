@@ -1,246 +1,282 @@
-// Side Drawer Component
-// OceanValue Filter and Analysis Controls
+// Modern SideDrawer with Risk Analysis Filters
+// OceanValue Platform
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import './SideDrawer.css';
 
 interface SideDrawerProps {
   isOpen: boolean;
   onOpen: () => void;
   onClose: () => void;
-  hazardType: string;
-  onHazardSelect: (hazard: string) => void;
-  onFilterChange: (filters: any) => void;
-  onVisualize: () => void;
-  onGenerateReport: () => void;
-  isLoading: boolean;
+  onVisualize: (config: VisualizationConfig) => void;
 }
 
-const SideDrawer: React.FC<SideDrawerProps> = ({
+export interface VisualizationConfig {
+  riskType: string;
+  region: string;
+  startDate: string;
+  endDate: string;
+  latMin: number;
+  latMax: number;
+  lonMin: number;
+  lonMax: number;
+  operationalMax: number;
+  attentionMax: number;
+  thresholds: Record<string, { operationalMax: number; attentionMax: number; unit: string }>;
+  layers: {
+    baciaSantos: boolean;
+    baciaCampos: boolean;
+    blocosExploratorios: boolean;
+    camposProducao: boolean;
+  };
+}
+
+const RISK_TYPES = [
+  { id: 'wind', label: 'Vento', icon: '💨' },
+  { id: 'wave', label: 'Onda', icon: '🌊' },
+  { id: 'flood', label: 'Inundação', icon: '💧' },
+  { id: 'heatwave', label: 'Ondas Térmicas', icon: '🔥' },
+  { id: 'temperature', label: 'Temp. Superfície', icon: '🌡️' },
+  { id: 'current', label: 'Corrente', icon: '➡️' }
+];
+
+const REGIONS = [
+  {
+    id: 'geral',
+    label: 'Geral',
+    bounds: { latMin: -30.271, latMax: -17.186, lonMin: -50.264, lonMax: -35.293 }
+  },
+  {
+    id: 'bacia-santos',
+    label: 'Bacia de Santos',
+    bounds: { latMin: -28.0, latMax: -23.0, lonMin: -48.0, lonMax: -42.0 }
+  },
+  {
+    id: 'bacia-campos',
+    label: 'Bacia de Campos',
+    bounds: { latMin: -23.5, latMax: -20.5, lonMin: -42.0, lonMax: -39.0 }
+  },
+  {
+    id: 'blocos',
+    label: 'Blocos Exploratórios',
+    bounds: { latMin: -25.0, latMax: -20.0, lonMin: -45.0, lonMax: -39.0 }
+  },
+  {
+    id: 'campos-producao',
+    label: 'Campos de Produção',
+    bounds: { latMin: -25.0, latMax: -20.0, lonMin: -45.0, lonMax: -39.0 }
+  }
+];
+
+export const SideDrawer: React.FC<SideDrawerProps> = ({
   isOpen,
   onOpen,
   onClose,
-  hazardType,
-  onHazardSelect,
-  onFilterChange,
   onVisualize,
-  onGenerateReport,
-  isLoading,
 }) => {
-  const [selectedRegion, setSelectedRegion] = useState('');
-  const [lat, setLat] = useState('-23.96');
-  const [lon, setLon] = useState('-46.30');
-  const [startDate, setStartDate] = useState('2015-01-01');
-  const [endDate, setEndDate] = useState('2023-12-31');
-  const [windThreshold, setWindThreshold] = useState(25);
-  const [waveThreshold, setWaveThreshold] = useState(2.5);
-  const [precipThreshold, setPrecipThreshold] = useState(50);
-  const [tempThreshold, setTempThreshold] = useState(32);
+  const [riskType, setRiskType] = useState('wind');
+  const [region, setRegion] = useState('geral');
+  const [startDate, setStartDate] = useState('2024-01-01');
+  const [endDate, setEndDate] = useState('2024-12-31');
 
-  const handleApplyFilters = () => {
-    const filters = {
-      hazardType,
-      region: { lat: parseFloat(lat), lon: parseFloat(lon), name: selectedRegion },
-      period: { start: startDate, end: endDate },
-      thresholds: {
-        wind: windThreshold,
-        wave: waveThreshold,
-        precip: precipThreshold,
-        temp: tempThreshold,
-      },
+  // Spatial bounds
+  const [latMin, setLatMin] = useState(-30.271);
+  const [latMax, setLatMax] = useState(-17.186);
+  const [lonMin, setLonMin] = useState(-50.264);
+  const [lonMax, setLonMax] = useState(-35.293);
+
+  const [riskThresholds, setRiskThresholds] = useState<Record<string, { operationalMax: number; attentionMax: number; unit: string }>>({
+    wind: { operationalMax: 15, attentionMax: 20, unit: 'nos' },
+    wave: { operationalMax: 2, attentionMax: 4, unit: 'm' },
+    current: { operationalMax: 1, attentionMax: 2, unit: 'm/s' },
+    temperature: { operationalMax: 30, attentionMax: 35, unit: '°C' },
+    flood: { operationalMax: 1, attentionMax: 2, unit: 'm' },
+    heatwave: { operationalMax: 3, attentionMax: 7, unit: 'dias' }
+  });
+
+  // Layers
+  const [layers, setLayers] = useState({
+    baciaSantos: false,
+    baciaCampos: false,
+    blocosExploratorios: false,
+    camposProducao: false
+  });
+
+  // Update bounds when region changes
+  useEffect(() => {
+    const selectedRegion = REGIONS.find(r => r.id === region);
+    if (selectedRegion) {
+      setLatMin(selectedRegion.bounds.latMin);
+      setLatMax(selectedRegion.bounds.latMax);
+      setLonMin(selectedRegion.bounds.lonMin);
+      setLonMax(selectedRegion.bounds.lonMax);
+    }
+  }, [region]);
+
+  const updateThreshold = (
+    riskId: string,
+    type: 'operationalMax' | 'attentionMax',
+    value: number,
+  ) => {
+    setRiskThresholds(prev => ({
+      ...prev,
+      [riskId]: { ...prev[riskId as keyof typeof prev], [type]: value }
+    }));
+  };
+
+  const handleVisualize = () => {
+    const currentLimits = riskThresholds[riskType as keyof typeof riskThresholds];
+    const config: VisualizationConfig = {
+      riskType,
+      region,
+      startDate,
+      endDate,
+      latMin,
+      latMax,
+      lonMin,
+      lonMax,
+      operationalMax: currentLimits.operationalMax,
+      attentionMax: currentLimits.attentionMax,
+      thresholds: riskThresholds,
+      layers
     };
-    
-    onFilterChange(filters);
-    onVisualize();
+    onVisualize(config);
   };
 
   return (
     <>
-      {/* Toggle Button */}
-      {!isOpen && (
-        <button className="drawer-toggle" onClick={onOpen}>
-          ☰ Filtros
-        </button>
-      )}
-
-      {/* Drawer Overlay */}
-      {isOpen && <div className="drawer-overlay" onClick={onClose}></div>}
-
-      {/* Drawer Panel */}
+      {isOpen && <div className="drawer-overlay" onClick={onClose} />}
+      
       <div className={`side-drawer ${isOpen ? 'open' : ''}`}>
         <div className="drawer-header">
-          <h2>Filtros de Análise</h2>
+          <h2>Análise de Risco</h2>
           <button className="close-btn" onClick={onClose}>✕</button>
         </div>
 
         <div className="drawer-content">
-          {/* Hazard Selection */}
+          {/* Tipo de Risco */}
           <section className="filter-section">
             <h3>Tipo de Risco</h3>
-            <div className="hazard-options">
-              {[
-                { id: 'wind', label: 'Vento' },
-                { id: 'wave', label: 'Onda' },
-                { id: 'flood', label: 'Inundação' },
-                { id: 'heatwave', label: 'Ondas Térmicas' },
-                { id: 'sst', label: 'Temp. Superficial do Mar' },
-                { id: 'current', label: 'Corrente' },
-              ].map((hazard) => (
-                <label key={hazard.id} className="radio-option">
-                  <input
-                    type="radio"
-                    name="hazard"
-                    value={hazard.id}
-                    checked={hazardType === hazard.id}
-                    onChange={(e) => onHazardSelect(e.target.value)}
-                  />
-                  <span>{hazard.label}</span>
-                </label>
+            <div className="risk-types-grid">
+              {RISK_TYPES.map(risk => (
+                <button
+                  key={risk.id}
+                  className={`risk-hex ${riskType === risk.id ? 'active' : ''}`}
+                  onClick={() => setRiskType(risk.id)}
+                >
+                  <span className="risk-icon">{risk.icon}</span>
+                  <span className="risk-label">{risk.label}</span>
+                </button>
               ))}
             </div>
           </section>
 
-          {/* Region Selection */}
+          {/* Região */}
           <section className="filter-section">
             <h3>Região</h3>
-            <select 
-              value={selectedRegion} 
-              onChange={(e) => setSelectedRegion(e.target.value)}
-              className="form-select"
-            >
-              <option value="">-- Selecione Região --</option>
-              <option value="santos">Bacia de Santos</option>
-              <option value="campos">Bacia de Campos</option>
-              <option value="espirito_santo">Bacia do Espírito Santo</option>
-              <option value="rio_de_janeiro">Rio de Janeiro</option>
-              <option value="bahia">Bahia</option>
+            <select value={region} onChange={(e) => setRegion(e.target.value)} className="region-select">
+              {REGIONS.map(r => (
+                <option key={r.id} value={r.id}>{r.label}</option>
+              ))}
             </select>
-            
-            <div className="coordinates">
-              <label>
-                Latitude:
-                <input type="number" value={lat} onChange={(e) => setLat(e.target.value)} step="0.01" />
-              </label>
-              <label>
-                Longitude:
-                <input type="number" value={lon} onChange={(e) => setLon(e.target.value)} step="0.01" />
-              </label>
+            <div className="bounds-compact">
+              <input type="number" value={latMin} onChange={(e) => setLatMin(parseFloat(e.target.value))} step="0.001" placeholder="Lat Min" />
+              <input type="number" value={latMax} onChange={(e) => setLatMax(parseFloat(e.target.value))} step="0.001" placeholder="Lat Max" />
+              <input type="number" value={lonMin} onChange={(e) => setLonMin(parseFloat(e.target.value))} step="0.001" placeholder="Lon Min" />
+              <input type="number" value={lonMax} onChange={(e) => setLonMax(parseFloat(e.target.value))} step="0.001" placeholder="Lon Max" />
             </div>
-
-            <button className="btn-draw">📍 Desenhar Região no Mapa</button>
           </section>
 
-          {/* Period Selection */}
+          {/* Período de Análise */}
           <section className="filter-section">
             <h3>Período de Análise</h3>
-            <label>
-              Data Inicial:
+            <div className="input-group">
+              <label>Data Inicial</label>
               <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
-            </label>
-            <label>
-              Data Final:
+            </div>
+            <div className="input-group">
+              <label>Data Final</label>
               <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
-            </label>
-            <div className="period-presets">
-              <button className="preset" onClick={() => { setStartDate('2023-01-01'); setEndDate('2023-12-31'); }}>1 Ano</button>
-              <button className="preset" onClick={() => { setStartDate('2019-01-01'); setEndDate('2023-12-31'); }}>5 Anos</button>
-              <button className="preset" onClick={() => { setStartDate('2015-01-01'); setEndDate('2023-12-31'); }}>Todo</button>
             </div>
           </section>
 
-          {/* Thresholds */}
+          {/* Limites Operacionais por Risco */}
           <section className="filter-section">
-            <h3>Limites de Variáveis</h3>
-            
-            {(hazardType === 'wind' || hazardType === '') && (
-              <label>
-                Limite Vento (knots):
-                <input 
-                  type="range" 
-                  min="0" 
-                  max="50" 
-                  value={windThreshold}
-                  onChange={(e) => setWindThreshold(parseFloat(e.target.value))}
-                />
-                <span>{windThreshold.toFixed(1)}</span>
-              </label>
-            )}
-
-            {(hazardType === 'wave' || hazardType === '') && (
-              <label>
-                Limite Onda (m):
-                <input 
-                  type="range" 
-                  min="0" 
-                  max="10" 
-                  step="0.1"
-                  value={waveThreshold}
-                  onChange={(e) => setWaveThreshold(parseFloat(e.target.value))}
-                />
-                <span>{waveThreshold.toFixed(1)}</span>
-              </label>
-            )}
-
-            {(hazardType === 'flood' || hazardType === '') && (
-              <label>
-                Limite Precipitação (mm):
-                <input 
-                  type="range" 
-                  min="0" 
-                  max="200" 
-                  step="5"
-                  value={precipThreshold}
-                  onChange={(e) => setPrecipThreshold(parseFloat(e.target.value))}
-                />
-                <span>{precipThreshold.toFixed(0)}</span>
-              </label>
-            )}
-
-            {(hazardType === 'heatwave' || hazardType === '') && (
-              <label>
-                Limite Temperatura (°C):
-                <input 
-                  type="range" 
-                  min="20" 
-                  max="45" 
-                  step="0.1"
-                  value={tempThreshold}
-                  onChange={(e) => setTempThreshold(parseFloat(e.target.value))}
-                />
-                <span>{tempThreshold.toFixed(1)}</span>
-              </label>
-            )}
+            <h3>Limites Operacionais</h3>
+            <div className="var-limits-compact">
+              {RISK_TYPES.map(risk => {
+                const limits = riskThresholds[risk.id as keyof typeof riskThresholds];
+                return (
+                  <div key={risk.id} className="var-limit-row">
+                    <span className="var-icon">{risk.icon}</span>
+                    <span className="var-name">{risk.label}</span>
+                    <input
+                      type="number"
+                      value={limits.operationalMax}
+                      onChange={(e) => updateThreshold(risk.id, 'operationalMax', parseFloat(e.target.value))}
+                      step="0.1"
+                      placeholder="Operacional <="
+                      className="var-input-min"
+                    />
+                    <span className="separator">—</span>
+                    <input
+                      type="number"
+                      value={limits.attentionMax}
+                      onChange={(e) => updateThreshold(risk.id, 'attentionMax', parseFloat(e.target.value))}
+                      step="0.1"
+                      placeholder="Atenção <="
+                      className="var-input-max"
+                    />
+                    <span className="var-unit">{limits.unit}</span>
+                  </div>
+                );
+              })}
+            </div>
           </section>
 
-          {/* Data Upload */}
+          {/* Camadas */}
           <section className="filter-section">
-            <h3>Dados Personalizados</h3>
-            <label className="file-upload">
-              <input type="file" accept=".nc,.tif,.h5" />
-              <span>📁 Arrastar arquivo ou clique aqui</span>
-            </label>
-            <p className="file-help">Formatos: .nc, .tif, .h5</p>
+            <h3>Camadas</h3>
+            <div className="layers-list">
+              <label className="layer-item">
+                <input
+                  type="checkbox"
+                  checked={layers.baciaSantos}
+                  onChange={(e) => setLayers({ ...layers, baciaSantos: e.target.checked })}
+                />
+                <span>Bacia de Santos</span>
+              </label>
+              <label className="layer-item">
+                <input
+                  type="checkbox"
+                  checked={layers.baciaCampos}
+                  onChange={(e) => setLayers({ ...layers, baciaCampos: e.target.checked })}
+                />
+                <span>Bacia de Campos</span>
+              </label>
+              <label className="layer-item">
+                <input
+                  type="checkbox"
+                  checked={layers.blocosExploratorios}
+                  onChange={(e) => setLayers({ ...layers, blocosExploratorios: e.target.checked })}
+                />
+                <span>Blocos Exploratórios</span>
+              </label>
+              <label className="layer-item">
+                <input
+                  type="checkbox"
+                  checked={layers.camposProducao}
+                  onChange={(e) => setLayers({ ...layers, camposProducao: e.target.checked })}
+                />
+                <span>Campos de Produção</span>
+              </label>
+            </div>
           </section>
-        </div>
 
-        {/* Action Buttons */}
-        <div className="drawer-footer">
-          <button 
-            className="btn btn-primary" 
-            onClick={handleApplyFilters}
-            disabled={isLoading}
-          >
-            {isLoading ? '⏳ Processando...' : '🔍 Visualizar'}
-          </button>
-          <button 
-            className="btn btn-secondary" 
-            onClick={onGenerateReport}
-            disabled={isLoading}
-          >
-            {isLoading ? '⏳ Gerando...' : '📄 Gerar Relatório'}
-          </button>
-          <button className="btn btn-outline" onClick={onClose}>
-            Fechar
+          {/* Visualizar Button */}
+          <button className="visualize-btn" onClick={handleVisualize}>
+            <span className="btn-icon">📊</span>
+            <span>Visualizar</span>
           </button>
         </div>
       </div>

@@ -3,7 +3,8 @@
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.middleware.gzip import GZIPMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 import logging
 import os
@@ -17,7 +18,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Import routers
-from app.routers import hazards, data, analysis, reports
+from .routers import hazards, data, analysis, reports, climate_data
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -44,11 +45,23 @@ app = FastAPI(
 )
 
 # Middleware
-app.add_middleware(GZIPMiddleware, minimum_size=1000)
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(","),
+    allow_origins=[
+        "http://localhost:5173",
+        "http://localhost:5174",
+        "http://localhost:5175",
+        "http://localhost:4173",
+        "http://127.0.0.1:5173",
+        "http://127.0.0.1:5174",
+        "http://127.0.0.1:5175",
+        "http://127.0.0.1:4173",
+        "http://localhost:8000",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -59,6 +72,7 @@ app.include_router(hazards.router, prefix="/api/v1/hazards", tags=["Hazards"])
 app.include_router(data.router, prefix="/api/v1/data", tags=["Data"])
 app.include_router(analysis.router, prefix="/api/v1/analysis", tags=["Analysis"])
 app.include_router(reports.router, prefix="/api/v1/reports", tags=["Reports"])
+app.include_router(climate_data.router, prefix="/api/v1/climate", tags=["Climate Data"])
 
 # Health check endpoint
 @app.get("/health", tags=["Health"])
@@ -90,11 +104,11 @@ async def root():
 @app.exception_handler(Exception)
 async def global_exception_handler(request, exc):
     logger.error(f"Unhandled exception: {exc}", exc_info=True)
-    return {
+    return JSONResponse(status_code=500, content={
         "status": "error",
         "message": "Internal server error",
         "detail": str(exc)
-    }
+    })
 
 if __name__ == "__main__":
     import uvicorn
@@ -105,3 +119,5 @@ if __name__ == "__main__":
         port=int(os.getenv("PORT", 8000)),
         reload=os.getenv("DEBUG", "False").lower() == "true"
     )
+
+

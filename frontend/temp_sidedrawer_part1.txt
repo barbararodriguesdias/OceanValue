@@ -1,0 +1,150 @@
+﻿// Modern SideDrawer with Risk Analysis Filters
+// OceanValue Platform
+
+import React, { useState, useEffect } from 'react';
+import './SideDrawer.css';
+
+interface SideDrawerProps {
+  isOpen: boolean;
+  onOpen: () => void;
+  onClose: () => void;
+  onVisualize: (config: VisualizationConfig) => void;
+}
+
+export interface VisualizationConfig {
+  riskType: string;
+  region: string;
+  startDate: string;
+  endDate: string;
+  latMin: number;
+  latMax: number;
+  lonMin: number;
+  lonMax: number;
+  varMin: number;
+  varMax: number;
+  layers: {
+    baciaSantos: boolean;
+    baciaCampos: boolean;
+    blocosExploratorios: boolean;
+    camposProducao: boolean;
+  };
+}
+
+const RISK_TYPES = [
+  { id: 'wind', label: 'Vento', icon: 'ðŸ’¨' },
+  { id: 'wave', label: 'Onda', icon: 'ðŸŒŠ' },
+  { id: 'flood', label: 'InundaÃ§Ã£o', icon: 'ðŸ’§' },
+  { id: 'heatwave', label: 'Ondas TÃ©rmicas', icon: 'ðŸ”¥' },
+  { id: 'temperature', label: 'Temp. SuperfÃ­cie', icon: 'ðŸŒ¡ï¸' },
+  { id: 'current', label: 'Corrente', icon: 'âž¡ï¸' }
+];
+
+const REGIONS = [
+  { 
+    id: 'geral', 
+    label: 'Geral',
+    bounds: { latMin: -30.271, latMax: -17.186, lonMin: -50.264, lonMax: -35.293 }
+  },
+  { 
+    id: 'bacia-santos', 
+    label: 'Bacia de Santos',
+    bounds: { latMin: -28.0, latMax: -23.0, lonMin: -48.0, lonMax: -42.0 }
+  },
+  { 
+    id: 'bacia-campos', 
+    label: 'Bacia de Campos',
+    bounds: { latMin: -23.5, latMax: -20.5, lonMin: -42.0, lonMax: -39.0 }
+  },
+  { 
+    id: 'blocos', 
+    label: 'Blocos ExploratÃ³rios',
+    bounds: { latMin: -25.0, latMax: -20.0, lonMin: -45.0, lonMax: -39.0 }
+  },
+  { 
+    id: 'campos-producao', 
+    label: 'Campos de ProduÃ§Ã£o',
+    bounds: { latMin: -25.0, latMax: -20.0, lonMin: -45.0, lonMax: -39.0 }
+  }
+];
+
+export const SideDrawer: React.FC<SideDrawerProps> = ({ isOpen, onOpen, onClose, onVisualize }) => {
+  const [riskType, setRiskType] = useState('wind');
+  const [region, setRegion] = useState('geral');
+  const [startDate, setStartDate] = useState('2024-01-01');
+  const [endDate, setEndDate] = useState('2024-12-31');
+  
+  // Spatial bounds
+  const [latMin, setLatMin] = useState(-30.271);
+  const [latMax, setLatMax] = useState(-17.186);
+  const [lonMin, setLonMin] = useState(-50.264);
+  const [lonMax, setLonMax] = useState(-35.293);
+  
+  // Variable limits por tipo de risco
+  const [varLimits, setVarLimits] = useState({
+    wind: { min: 0, max: 30, unit: 'm/s' },
+    wave: { min: 0, max: 10, unit: 'm' },
+    current: { min: 0, max: 2, unit: 'm/s' },
+    temperature: { min: 15, max: 35, unit: 'Â°C' },
+    flood: { min: 0, max: 5, unit: 'm' },
+    heatwave: { min: 0, max: 30, unit: 'dias' }
+  });
+  
+  // Layers
+  const [layers, setLayers] = useState({
+    baciaSantos: false,
+    baciaCampos: false,
+    blocosExploratorios: false,
+    camposProducao: false
+  });
+
+  // Update bounds when region changes
+  useEffect(() => {
+    const selectedRegion = REGIONS.find(r => r.id === region);
+    if (selectedRegion) {
+      setLatMin(selectedRegion.bounds.latMin);
+      setLatMax(selectedRegion.bounds.latMax);
+      setLonMin(selectedRegion.bounds.lonMin);
+      setLonMax(selectedRegion.bounds.lonMax);
+    }
+  }, [region]);
+
+  const handleVisualize = () => {
+    const currentLimits = varLimits[riskType as keyof typeof varLimits];
+    const config: VisualizationConfig = {
+      riskType,
+      region,
+      startDate,
+      endDate,
+      latMin,
+      latMax,
+      lonMin,
+      lonMax,
+      varMin: currentLimits.min,
+      varMax: currentLimits.max,
+      layers
+    };
+    onVisualize(config);
+  };
+
+  const updateVarLimit = (riskId: string, type: 'min' | 'max', value: number) => {
+    setVarLimits(prev => ({
+      ...prev,
+      [riskId]: {
+        ...prev[riskId as keyof typeof prev],
+        [type]: value
+      }
+    }));
+  };
+
+  const toggleLayer = (layerName: keyof typeof layers) => {
+    setLayers(prev => ({
+      ...prev,
+      [layerName]: !prev[layerName]
+    }));
+  };
+
+  return (
+    <>
+      <div className={`side-drawer-overlay ${isOpen ? 'open' : ''}`} onClick={onClose} />
+      <div className={`side-drawer ${isOpen ? 'open' : ''}`}>
+        <div className="drawer-header">

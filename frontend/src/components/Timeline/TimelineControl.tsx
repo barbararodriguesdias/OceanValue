@@ -1,27 +1,25 @@
-export { default } from './TimelineControl';
-/*
 // Timeline Component
 // OceanValue Animation Timeline Control
 
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import './Timeline.css';
 
 interface TimelineProps {
   startDate: string;
   endDate: string;
-  varMin?: number;
-  varMax?: number;
+  operationalMax?: number;
+  attentionMax?: number;
   varUnit?: string;
   riskType?: string;
   onTimeChange?: (time: string) => void;
   stepDays?: number;
 }
 
-const Timeline: React.FC<TimelineProps> = ({
+const TimelineControl: React.FC<TimelineProps> = ({
   startDate,
   endDate,
-  varMin = 0,
-  varMax = 100,
+  operationalMax = 0,
+  attentionMax = 0,
   varUnit = '',
   riskType = 'wind',
   onTimeChange,
@@ -29,39 +27,37 @@ const Timeline: React.FC<TimelineProps> = ({
 }) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
-  const [currentDate, setCurrentDate] = useState<Date>(() => new Date(`${startDate}T00:00:00`));
+  const [currentDate, setCurrentDate] = useState<Date>(
+    () => new Date(`${startDate}T00:00:00`),
+  );
   const [currentTime, setCurrentTime] = useState('00:00');
 
   const start = new Date(`${startDate}T00:00:00`);
   const end = new Date(`${endDate}T00:00:00`);
-    setCurrentStep(0);
-    const resetDate = new Date(`${startDate}T00:00:00`);
-    setCurrentDate(resetDate);
-    setCurrentTime('00:00');
-    onTimeChange?.(formatDate(resetDate));
-  const totalSteps = Math.max(1, Math.round((end.getTime() - start.getTime()) / msPerDay / stepDays));
+  const msPerDay = 24 * 60 * 60 * 1000;
+  const totalSteps = Math.max(
+    1,
+    Math.round((end.getTime() - start.getTime()) / msPerDay / stepDays),
+  );
 
   const formatDate = (date: Date) => date.toISOString().slice(0, 10);
 
-  // Get unit based on risk type
   const getUnit = () => {
     const units: Record<string, string> = {
-      wind: 'm/s',
+      wind: 'nos',
       wave: 'm',
       current: 'm/s',
       temperature: '°C',
       flood: 'm',
-      heatwave: 'dias'
+      heatwave: 'dias',
     };
     return varUnit || units[riskType] || '';
   };
 
-  // Generate gradient colors
   const generateGradient = () => {
     return 'linear-gradient(to right, #0000FF 0%, #00FFFF 25%, #00FF00 50%, #FFFF00 75%, #FF0000 100%)';
   };
 
-  // Update current date when props change
   useEffect(() => {
     setCurrentStep(0);
     const resetDate = new Date(`${startDate}T00:00:00`);
@@ -133,8 +129,8 @@ const Timeline: React.FC<TimelineProps> = ({
             <div className="legend-header">Legenda</div>
             <div className="legend-gradient" style={{ background: generateGradient() }}></div>
             <div className="legend-labels">
-              <span className="legend-min">{varMin.toFixed(1)} {getUnit()}</span>
-              <span className="legend-max">{varMax.toFixed(1)} {getUnit()}</span>
+              <span className="legend-min">Operacional &le; {operationalMax.toFixed(1)} {getUnit()}</span>
+              <span className="legend-max">Atenção &le; {attentionMax.toFixed(1)} {getUnit()}</span>
             </div>
           </div>
         </div>
@@ -143,4 +139,4 @@ const Timeline: React.FC<TimelineProps> = ({
   );
 };
 
-*/
+export default TimelineControl;
