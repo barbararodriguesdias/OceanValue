@@ -176,8 +176,7 @@ Objetivo:
 ## Contato
 
 - Responsável: Barbara Dias
-- E-mail: [preencher]
-- LinkedIn/GitHub: [preencher]
+- E-mail: rodriguesdiasbarbara@gmail.com
 
 ---
 
