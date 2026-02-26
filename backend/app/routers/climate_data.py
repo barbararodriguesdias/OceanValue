@@ -4,9 +4,9 @@ from fastapi import APIRouter, HTTPException, Query
 from typing import Optional, List
 import os
 import httpx
-from app.services.zarr_reader import zarr_reader
-from app.services.cmems_current import cmems_current_reader
-from app.services.netcdf_reader import netcdf_reader
+from ..services.zarr_reader import zarr_reader
+from ..services.cmems_current import cmems_current_reader
+from ..services.climada_wind_wave_service import climada_wind_wave_service
 
 router = APIRouter()
 
@@ -155,15 +155,15 @@ async def get_current_snapshot(
             detail="Configure CMEMS_* ou CURRENT_API_URL no backend",
         )
 
-    params = {"time": time}
+    params: dict[str, str] = {"time": str(time)}
     if lat_min is not None:
-        params["lat_min"] = lat_min
+        params["lat_min"] = str(lat_min)
     if lat_max is not None:
-        params["lat_max"] = lat_max
+        params["lat_max"] = str(lat_max)
     if lon_min is not None:
-        params["lon_min"] = lon_min
+        params["lon_min"] = str(lon_min)
     if lon_max is not None:
-        params["lon_max"] = lon_max
+        params["lon_max"] = str(lon_max)
 
     try:
         async with httpx.AsyncClient(timeout=60) as client:
@@ -183,9 +183,15 @@ async def get_wind_snapshot(
     lon_max: Optional[float] = Query(None),
     stat: str = Query("mean", description="mean or max"),
 ):
-    """Get wind snapshot from local NetCDF datasets."""
+    """Get wind snapshot from ERA5 Zarr with operational status."""
     try:
-        return netcdf_reader.get_wind_snapshot(time, lat_min, lat_max, lon_min, lon_max, stat)
+        return zarr_reader.get_wind_hazard_snapshot(
+            time=time,
+            lat_min=lat_min,
+            lat_max=lat_max,
+            lon_min=lon_min,
+            lon_max=lon_max,
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -224,9 +230,9 @@ async def get_wave_snapshot(
     lon_max: Optional[float] = Query(None),
     stat: str = Query("mean", description="mean or max"),
 ):
-    """Get wave snapshot from local NetCDF datasets."""
+    """Get wave snapshot from ERA5 Zarr dataset."""
     try:
-        return netcdf_reader.get_wave_snapshot(time, lat_min, lat_max, lon_min, lon_max, stat)
+        return zarr_reader.get_grid_snapshot("hs", time, lat_min, lat_max, lon_min, lon_max)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -242,17 +248,18 @@ async def get_wind_scenario_comparison(
     operational_max_knots: float = Query(15.0, description="Operational max wind (knots)"),
     attention_max_knots: float = Query(20.0, description="Attention max wind (knots)"),
 ):
-    """Compare historical vs future wind conditions at a point."""
+    """Compare historical vs future wind conditions using CLIMADA impact calculations."""
     try:
-        return netcdf_reader.get_wind_scenario_comparison(
+        return climada_wind_wave_service.get_scenario_comparison(
+            hazard_name="wind",
             lat=lat,
             lon=lon,
             scenario=scenario,
             stat=stat,
             historical_period=historical_period,
             future_period=future_period,
-            operational_max_knots=operational_max_knots,
-            attention_max_knots=attention_max_knots,
+            operational_max=operational_max_knots,
+            attention_max=attention_max_knots,
         )
     except FileNotFoundError as e:
         return {
@@ -318,17 +325,18 @@ async def get_wave_scenario_comparison(
     operational_max_meters: float = Query(2.0, description="Operational max wave height (m)"),
     attention_max_meters: float = Query(4.0, description="Attention max wave height (m)"),
 ):
-    """Compare historical vs future wave conditions at a point."""
+    """Compare historical vs future wave conditions using CLIMADA impact calculations."""
     try:
-        return netcdf_reader.get_wave_scenario_comparison(
+        return climada_wind_wave_service.get_scenario_comparison(
+            hazard_name="wave",
             lat=lat,
             lon=lon,
             scenario=scenario,
             stat=stat,
             historical_period=historical_period,
             future_period=future_period,
-            operational_max_meters=operational_max_meters,
-            attention_max_meters=attention_max_meters,
+            operational_max=operational_max_meters,
+            attention_max=attention_max_meters,
         )
     except FileNotFoundError as e:
         return {

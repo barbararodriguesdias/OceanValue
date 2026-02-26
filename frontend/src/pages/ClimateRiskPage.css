@@ -1,0 +1,499 @@
+.climate-risk-page {
+  min-height: 100%;
+  width: 100%;
+  padding: 24px;
+  color: #0f172a;
+  background: #f1f5f9;
+}
+
+.climate-risk-page .page-header {
+  background: linear-gradient(140deg, #0b2447 0%, #17375e 55%, #334155 100%);
+  color: #f8fafc;
+  border-radius: 12px;
+  padding: 22px 24px;
+  margin-bottom: 20px;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.18);
+}
+
+.climate-risk-page .page-header h1 {
+  margin: 0 0 8px;
+  font-size: 1.7rem;
+  font-weight: 700;
+}
+
+.climate-risk-page .page-subtitle {
+  margin: 0;
+  max-width: 900px;
+  color: rgba(248, 250, 252, 0.9);
+  line-height: 1.45;
+}
+
+.climate-risk-page .page-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.climate-risk-page .climate-top-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.climate-risk-page .left-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.climate-risk-page .right-map-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  width: 100%;
+}
+
+.climate-risk-page .mode-selector {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+
+.climate-risk-page .mode-btn,
+.climate-risk-page .location-card,
+.climate-risk-page .form-card,
+.climate-risk-page .results-section {
+  background: #ffffff;
+  border: 1px solid #dbe3ee;
+  border-radius: 12px;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
+}
+
+.climate-risk-page .mode-btn {
+  text-align: left;
+  padding: 12px;
+  cursor: pointer;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.climate-risk-page .mode-btn:hover {
+  border-color: #94a3b8;
+  background: #f8fafc;
+}
+
+.climate-risk-page .mode-btn.active {
+  border-color: #1e3a5f;
+  background: #f8fbff;
+}
+
+.climate-risk-page .mode-label {
+  display: block;
+  margin-bottom: 4px;
+  color: #1e293b;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.climate-risk-page .mode-desc {
+  display: block;
+  color: #64748b;
+  font-size: 0.88rem;
+}
+
+.climate-risk-page .mode-panel h2,
+.climate-risk-page .coordinates-panel h2,
+.climate-risk-page .scenarios-panel h2 {
+  margin: 0 0 12px;
+}
+
+.climate-risk-page .location-card {
+  padding: 16px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.climate-risk-page .location-card h3 {
+  margin: 0 0 12px;
+  color: #1e293b;
+}
+
+.climate-risk-page .analysis-location-select {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.climate-risk-page .analysis-location-select label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: #334155;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.climate-risk-page .analysis-location-select select {
+  width: 100%;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 9px 10px;
+  color: #0f172a;
+  background: #ffffff;
+}
+
+.climate-risk-page .analysis-location-select select:focus {
+  outline: none;
+  border-color: #1e3a5f;
+  box-shadow: 0 0 0 2px rgba(30, 58, 95, 0.12);
+}
+
+.climate-risk-page .analysis-mini-map {
+  width: 100%;
+  height: 420px;
+  min-height: 420px;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+  margin-bottom: 12px;
+  position: relative;
+}
+
+.climate-risk-page .climate-map-with-toggles {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 190px;
+  gap: 12px;
+  align-items: start;
+}
+
+.climate-risk-page .climate-map-with-toggles .analysis-mini-map {
+  margin-bottom: 0;
+}
+
+.climate-risk-page .climate-map-layer-toggles {
+  border: 1px solid #dbe3ee;
+  border-radius: 10px;
+  background: #f8fafc;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.climate-risk-page .climate-map-layer-toggles h4 {
+  margin: 0 0 4px;
+  font-size: 0.88rem;
+  color: #1e293b;
+}
+
+.climate-risk-page .climate-layer-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  color: #334155;
+  font-size: 0.9rem;
+}
+
+.climate-risk-page .climate-layer-switch {
+  position: relative;
+  display: inline-flex;
+  width: 40px;
+  height: 22px;
+  flex: 0 0 auto;
+}
+
+.climate-risk-page .climate-layer-checkbox {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+  z-index: 2;
+}
+
+.climate-risk-page .climate-layer-slider {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: #cbd5e1;
+  transition: background 0.2s ease;
+}
+
+.climate-risk-page .climate-layer-slider::before {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  background: #ffffff;
+  transition: transform 0.2s ease;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.25);
+}
+
+.climate-risk-page .climate-layer-checkbox:checked + .climate-layer-slider {
+  background: #1e3a5f;
+}
+
+.climate-risk-page .climate-layer-checkbox:checked + .climate-layer-slider::before {
+  transform: translateX(18px);
+}
+
+.climate-risk-page .climate-layer-checkbox:focus-visible + .climate-layer-slider {
+  box-shadow: 0 0 0 2px rgba(30, 58, 95, 0.18);
+}
+
+.climate-risk-page .analysis-mini-map .map-wrapper {
+  min-height: 420px;
+  height: 420px;
+}
+
+.climate-risk-page .analysis-mini-map .map {
+  min-height: 420px;
+  height: 420px;
+}
+
+.climate-risk-page .analysis-hint {
+  margin: 0;
+  color: #64748b;
+  font-size: 0.85rem;
+}
+
+.climate-risk-page .analysis-error {
+  margin: 0;
+  color: #b91c1c;
+  font-size: 0.85rem;
+}
+
+.climate-risk-page .location-display {
+  margin-top: 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+  padding: 8px 10px;
+  color: #334155;
+}
+
+.climate-risk-page .form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.climate-risk-page .form-card {
+  padding: 16px;
+}
+
+.climate-risk-page .form-card h2 {
+  margin: 0 0 14px;
+  color: #1e293b;
+  font-size: 1.04rem;
+  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: 8px;
+}
+
+.climate-risk-page .form-group {
+  margin-bottom: 12px;
+}
+
+.climate-risk-page .form-group label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #334155;
+}
+
+.climate-risk-page .form-group input[type="checkbox"] {
+  width: auto;
+  margin-right: 6px;
+}
+
+.climate-risk-page .form-group input[type="text"],
+.climate-risk-page .form-group input[type="number"],
+.climate-risk-page .form-group select {
+  width: 100%;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 9px 10px;
+  color: #0f172a;
+  background: #ffffff;
+}
+
+.climate-risk-page .form-group input:focus,
+.climate-risk-page .form-group select:focus {
+  outline: none;
+  border-color: #1e3a5f;
+  box-shadow: 0 0 0 2px rgba(30, 58, 95, 0.12);
+}
+
+.climate-risk-page .form-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 10px;
+}
+
+.climate-risk-page .hazards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 8px;
+}
+
+.climate-risk-page .hazard-btn {
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #1e293b;
+  border-radius: 8px;
+  padding: 9px 10px;
+  cursor: pointer;
+  text-align: left;
+  font-weight: 600;
+}
+
+.climate-risk-page .hazard-btn:hover:not(.disabled) {
+  border-color: #94a3b8;
+  background: #f8fafc;
+}
+
+.climate-risk-page .hazard-btn.selected {
+  border-color: #1e3a5f;
+  background: #1e3a5f;
+  color: #f8fafc;
+}
+
+.climate-risk-page .hazard-btn.disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.climate-risk-page .hazard-btn .badge {
+  display: block;
+  margin-top: 4px;
+  color: #94a3b8;
+  font-size: 0.72rem;
+  font-weight: 500;
+}
+
+.climate-risk-page .info-box {
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  background: #f8fafc;
+  padding: 10px;
+  margin-top: 10px;
+}
+
+.climate-risk-page .info-box p {
+  margin: 0;
+  color: #334155;
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.climate-risk-page .run-analysis-btn {
+  width: 100%;
+  border: none;
+  border-radius: 10px;
+  padding: 12px 14px;
+  background: #1e293b;
+  color: #f8fafc;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.climate-risk-page .run-analysis-btn:hover:not(:disabled) {
+  background: #0f172a;
+}
+
+.climate-risk-page .run-analysis-btn:disabled {
+  background: #94a3b8;
+  cursor: not-allowed;
+}
+
+.climate-risk-page .results-section {
+  padding: 20px;
+}
+
+.climate-risk-page .results-section h2 {
+  margin: 0 0 16px;
+  color: #1e293b;
+}
+
+.climate-risk-page .results-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.climate-risk-page .result-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #f8fafc;
+  padding: 14px;
+}
+
+.climate-risk-page .climate-chart-card {
+  margin-top: 12px;
+  height: 320px;
+}
+
+.climate-risk-page .result-card h3 {
+  margin: 0 0 10px;
+  color: #334155;
+  font-size: 1rem;
+}
+
+.climate-risk-page .metric {
+  margin-bottom: 10px;
+}
+
+.climate-risk-page .metric .value {
+  display: block;
+  color: #1e3a5f;
+  font-size: 1.55rem;
+  line-height: 1.15;
+  font-weight: 700;
+}
+
+.climate-risk-page .metric .label {
+  display: block;
+  margin-top: 4px;
+  color: #64748b;
+  font-size: 0.84rem;
+}
+
+@media (max-width: 768px) {
+  .climate-risk-page {
+    padding: 14px;
+  }
+
+  .climate-risk-page .climate-top-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .climate-risk-page .page-header h1 {
+    font-size: 1.4rem;
+  }
+
+  .climate-risk-page .mode-selector {
+    grid-template-columns: 1fr;
+  }
+
+  .climate-risk-page .form-grid,
+  .climate-risk-page .form-row,
+  .climate-risk-page .results-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .climate-risk-page .climate-map-with-toggles {
+    grid-template-columns: 1fr;
+  }
+}

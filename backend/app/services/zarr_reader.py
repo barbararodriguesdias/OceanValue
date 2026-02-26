@@ -9,6 +9,7 @@ import geopandas as gpd
 from shapely.geometry import Point
 from shapely.ops import unary_union
 import fiona
+from .climada_petals import climada_petals_engine
 
 
 class ZarrDataReader:
@@ -480,72 +481,38 @@ class ZarrDataReader:
                 hazard_total_hours = max(float(status.size), 1.0)
                 hazard_annualization = 8760.0 / hazard_total_hours
 
-                hazard_aal = float(np.mean(hazard_loss_per_step)) * hazard_annualization
-                hazard_pml = float(np.nanmax(hazard_loss_per_step)) * hazard_annualization
-                hazard_var_q = float(np.nanquantile(hazard_loss_per_step, quantile)) * hazard_annualization
-
-                hazard_tail = hazard_loss_per_step[hazard_loss_per_step >= np.nanquantile(hazard_loss_per_step, quantile)]
-                hazard_tvar_q = (
-                    float(np.nanmean(hazard_tail)) if hazard_tail.size else float(np.nanquantile(hazard_loss_per_step, quantile))
-                ) * hazard_annualization
-
-                method = (risk_load_method or "none").lower()
-                if method == "var":
-                    hazard_risk_load = max(hazard_var_q - hazard_aal, 0.0)
-                elif method == "tvar":
-                    hazard_risk_load = max(hazard_tvar_q - hazard_aal, 0.0)
-                elif method == "stdev":
-                    hazard_risk_load = float(np.nanstd(hazard_loss_per_step)) * np.sqrt(hazard_annualization)
-                else:
-                    hazard_risk_load = 0.0
-
-                hazard_pure_premium = hazard_aal
-                hazard_technical_premium = hazard_pure_premium * (1.0 + float(max(expense_ratio, 0.0))) + hazard_risk_load
-
-                sensitivity_quantiles = [0.90, 0.95, 0.99]
-                quantile_sensitivity = []
-                for q in sensitivity_quantiles:
-                    var_q = float(np.nanquantile(hazard_loss_per_step, q)) * hazard_annualization
-                    tail_q = hazard_loss_per_step[hazard_loss_per_step >= np.nanquantile(hazard_loss_per_step, q)]
-                    tvar_q = (
-                        float(np.nanmean(tail_q)) if tail_q.size else float(np.nanquantile(hazard_loss_per_step, q))
-                    ) * hazard_annualization
-
-                    if method == "var":
-                        risk_load_q = max(var_q - hazard_aal, 0.0)
-                    elif method == "tvar":
-                        risk_load_q = max(tvar_q - hazard_aal, 0.0)
-                    elif method == "stdev":
-                        risk_load_q = float(np.nanstd(hazard_loss_per_step)) * np.sqrt(hazard_annualization)
-                    else:
-                        risk_load_q = 0.0
-
-                    tech_q = hazard_pure_premium * (1.0 + float(max(expense_ratio, 0.0))) + risk_load_q
-                    quantile_sensitivity.append(
-                        {
-                            "quantile": float(q),
-                            "var": float(var_q),
-                            "tvar": float(tvar_q),
-                            "technical_premium": float(tech_q),
-                        }
-                    )
+                hazard_pricing = climada_petals_engine.compute_pricing(
+                    loss_per_step=hazard_loss_per_step,
+                    annualization=hazard_annualization,
+                    risk_quantile=quantile,
+                    risk_load_method=risk_load_method,
+                    expense_ratio=float(max(expense_ratio, 0.0)),
+                )
+                quantile_sensitivity = climada_petals_engine.compute_quantile_sensitivity(
+                    loss_per_step=hazard_loss_per_step,
+                    annualization=hazard_annualization,
+                    risk_load_method=risk_load_method,
+                    expense_ratio=float(max(expense_ratio, 0.0)),
+                )
 
                 hazard_pricing_models[hazard] = {
                     "asset_value": asset_value_f,
                     "attention_loss_factor": attention_factor,
                     "stop_loss_factor": stop_factor,
                     "annualization_factor": hazard_annualization,
-                    "aal": float(hazard_aal),
-                    "pml": float(hazard_pml),
-                    "var": float(hazard_var_q),
-                    "tvar": float(hazard_tvar_q),
-                    "risk_load_method": method,
-                    "risk_load": float(hazard_risk_load),
+                    "aal": float(hazard_pricing["aal"]),
+                    "pml": float(hazard_pricing["pml"]),
+                    "var": float(hazard_pricing["var"]),
+                    "tvar": float(hazard_pricing["tvar"]),
+                    "risk_load_method": str(hazard_pricing["risk_load_method"]),
+                    "risk_load": float(hazard_pricing["risk_load"]),
                     "expense_ratio": float(max(expense_ratio, 0.0)),
-                    "pure_premium": float(hazard_pure_premium),
-                    "technical_premium": float(hazard_technical_premium),
+                    "pure_premium": float(hazard_pricing["pure_premium"]),
+                    "technical_premium": float(hazard_pricing["technical_premium"]),
                     "exceedance_method": exceedance_method,
-                    "risk_quantile": quantile,
+                    "risk_quantile": float(hazard_pricing["risk_quantile"]),
+                    "pricing_engine": str(hazard_pricing["engine"]),
+                    "petals_appendix": hazard_pricing.get("petals_appendix", {}),
                     "quantile_sensitivity": quantile_sensitivity,
                 }
 
@@ -686,43 +653,32 @@ class ZarrDataReader:
             total_hours = max(float(combined["total_hours"]), 1.0)
             annualization = 8760.0 / total_hours
 
-            period_expected_loss = float(np.mean(loss_per_step))
-            aal = period_expected_loss * annualization
-            pml = float(np.nanmax(loss_per_step)) * annualization
-            var_q = float(np.nanquantile(loss_per_step, quantile)) * annualization
-
-            tail = loss_per_step[loss_per_step >= np.nanquantile(loss_per_step, quantile)]
-            tvar_q = (float(np.nanmean(tail)) if tail.size else float(np.nanquantile(loss_per_step, quantile))) * annualization
-
-            method = (risk_load_method or "none").lower()
-            if method == "var":
-                risk_load = max(var_q - aal, 0.0)
-            elif method == "tvar":
-                risk_load = max(tvar_q - aal, 0.0)
-            elif method == "stdev":
-                risk_load = float(np.nanstd(loss_per_step)) * np.sqrt(annualization)
-            else:
-                risk_load = 0.0
-
-            pure_premium = aal
-            technical_premium = pure_premium * (1.0 + float(max(expense_ratio, 0.0))) + risk_load
+            pricing_out = climada_petals_engine.compute_pricing(
+                loss_per_step=loss_per_step,
+                annualization=annualization,
+                risk_quantile=quantile,
+                risk_load_method=risk_load_method,
+                expense_ratio=float(max(expense_ratio, 0.0)),
+            )
 
             pricing_models = {
                 "asset_value": asset_value_f,
                 "attention_loss_factor": attention_factor,
                 "stop_loss_factor": stop_factor,
                 "annualization_factor": annualization,
-                "aal": float(aal),
-                "pml": float(pml),
-                "var": float(var_q),
-                "tvar": float(tvar_q),
-                "risk_load_method": method,
-                "risk_load": float(risk_load),
+                "aal": float(pricing_out["aal"]),
+                "pml": float(pricing_out["pml"]),
+                "var": float(pricing_out["var"]),
+                "tvar": float(pricing_out["tvar"]),
+                "risk_load_method": str(pricing_out["risk_load_method"]),
+                "risk_load": float(pricing_out["risk_load"]),
                 "expense_ratio": float(max(expense_ratio, 0.0)),
-                "pure_premium": float(pure_premium),
-                "technical_premium": float(technical_premium),
+                "pure_premium": float(pricing_out["pure_premium"]),
+                "technical_premium": float(pricing_out["technical_premium"]),
                 "exceedance_method": exceedance_method,
-                "risk_quantile": quantile,
+                "risk_quantile": float(pricing_out["risk_quantile"]),
+                "pricing_engine": str(pricing_out["engine"]),
+                "petals_appendix": pricing_out.get("petals_appendix", {}),
             }
 
         result = {
@@ -739,6 +695,8 @@ class ZarrDataReader:
             "wind_rose": wind_rose,
             "exposure_reference": self._build_exposure_reference(lat=lat, lon=lon),
             "hazard_pricing_models": hazard_pricing_models,
+            "pricing_engine": "climada",
+            "petals_enabled": True,
         }
 
         if include_series:
@@ -902,6 +860,13 @@ class ZarrDataReader:
         attention_limit_knots: float = 20.0,
         cost_attention_per_hour: Optional[float] = None,
         cost_stop_per_hour: Optional[float] = None,
+        asset_value: Optional[float] = None,
+        attention_loss_factor: float = 0.35,
+        stop_loss_factor: float = 1.0,
+        exceedance_method: str = "weibull",
+        risk_load_method: str = "none",
+        risk_quantile: float = 0.95,
+        expense_ratio: float = 0.15,
     ) -> Dict:
         """Calculate wind risk metrics for a single point."""
 
@@ -941,6 +906,60 @@ class ZarrDataReader:
             }
             pricing["total_cost"] = pricing["attention_cost"] + pricing["stop_cost"]
 
+        # CLIMADA pricing models
+        pricing_models = None
+        if asset_value is not None and float(asset_value) > 0:
+            asset_value_f = float(asset_value)
+            quantile = float(np.clip(risk_quantile, 0.5, 0.999))
+            attention_factor = float(np.clip(attention_loss_factor, 0.0, 1.0))
+            stop_factor = float(max(stop_loss_factor, attention_factor))
+
+            loss_ratio = np.where(
+                status == 2,
+                stop_factor,
+                np.where(status == 1, attention_factor, 0.0),
+            )
+            loss_per_step = asset_value_f * loss_ratio
+
+            total_hours_f = max(float(total_hours), 1.0)
+            annualization = 8760.0 / total_hours_f
+
+            pricing_out = climada_petals_engine.compute_pricing(
+                loss_per_step=loss_per_step,
+                annualization=annualization,
+                risk_quantile=quantile,
+                risk_load_method=risk_load_method,
+                expense_ratio=float(max(expense_ratio, 0.0)),
+            )
+
+            quantile_sensitivity = climada_petals_engine.compute_quantile_sensitivity(
+                loss_per_step=loss_per_step,
+                annualization=annualization,
+                risk_load_method=risk_load_method,
+                expense_ratio=float(max(expense_ratio, 0.0)),
+            )
+
+            pricing_models = {
+                "asset_value": asset_value_f,
+                "attention_loss_factor": attention_factor,
+                "stop_loss_factor": stop_factor,
+                "annualization_factor": annualization,
+                "aal": float(pricing_out["aal"]),
+                "pml": float(pricing_out["pml"]),
+                "var": float(pricing_out["var"]),
+                "tvar": float(pricing_out["tvar"]),
+                "risk_load_method": str(pricing_out["risk_load_method"]),
+                "risk_load": float(pricing_out["risk_load"]),
+                "expense_ratio": float(max(expense_ratio, 0.0)),
+                "pure_premium": float(pricing_out["pure_premium"]),
+                "technical_premium": float(pricing_out["technical_premium"]),
+                "exceedance_method": exceedance_method,
+                "risk_quantile": float(pricing_out["risk_quantile"]),
+                "pricing_engine": str(pricing_out["engine"]),
+                "petals_appendix": pricing_out.get("petals_appendix", {}),
+                "quantile_sensitivity": quantile_sensitivity,
+            }
+
         return {
             "lat": float(speed_knots.lat.values),
             "lon": float(speed_knots.lon.values),
@@ -959,6 +978,9 @@ class ZarrDataReader:
                 "stop_hours": stop_hours,
             },
             "pricing": pricing,
+            "pricing_models": pricing_models,
+            "pricing_engine": "climada" if pricing_models else None,
+            "petals_enabled": pricing_models is not None,
         }
 
 

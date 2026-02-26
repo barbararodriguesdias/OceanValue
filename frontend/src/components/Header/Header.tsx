@@ -3,8 +3,8 @@ import './Header.css';
 
 interface HeaderProps {
   onToggleDrawer?: () => void;
-  activePage?: 'map' | 'analysis' | 'assets';
-  onNavigate?: (page: 'map' | 'analysis' | 'assets') => void;
+  activePage?: 'map' | 'analysis' | 'assets' | 'maritime-downtime' | 'climate-risk';
+  onNavigate?: (page: 'map' | 'analysis' | 'assets' | 'maritime-downtime' | 'climate-risk') => void;
 }
 
 const Header: React.FC<HeaderProps> = ({ onToggleDrawer, activePage, onNavigate }) => {
@@ -20,11 +20,6 @@ const Header: React.FC<HeaderProps> = ({ onToggleDrawer, activePage, onNavigate 
           >
             &#9776;
           </button>
-          <img
-            src="/oceanpact-logo.png"
-            alt="OceanPact Logo"
-            className="logo-image"
-          />
           <div className="logo-text">
             <h1 className="logo">OceanValue</h1>
             <p className="tagline">Climate Risk Pricing for Maritime Operations</p>
@@ -38,11 +33,20 @@ const Header: React.FC<HeaderProps> = ({ onToggleDrawer, activePage, onNavigate 
           >
             Visualizacao
           </button>
+          
           <button
-            className={`nav-link ${activePage === 'analysis' ? 'active' : ''}`}
-            onClick={() => onNavigate?.('analysis')}
+            className={`nav-link ${activePage === 'maritime-downtime' ? 'active' : ''}`}
+            onClick={() => onNavigate?.('maritime-downtime')}
+            title="Análise de Downtime Operacional de Embarcações"
           >
-            Analise
+            Downtime Marítimo
+          </button>
+          <button
+            className={`nav-link ${activePage === 'climate-risk' ? 'active' : ''}`}
+            onClick={() => onNavigate?.('climate-risk')}
+            title="Análise de Risco Climático Regional"
+          >
+            Risco Climático
           </button>
           <button
             className={`nav-link ${activePage === 'assets' ? 'active' : ''}`}

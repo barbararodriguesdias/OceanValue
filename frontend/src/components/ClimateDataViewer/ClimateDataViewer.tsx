@@ -1,8 +1,8 @@
-﻿import React, { useState, useEffect, useRef } from 'react';
-import mapboxgl from 'mapbox-gl';
-import * as climateDataService from '../../services/climateDataService';
-import type { SnapshotData, SpatialBounds } from '../../services/climateDataService';
+﻿import React, { useState, useEffect } from 'react';
+import { climateDataService } from '../../services/climateDataService';
+import type { SnapshotData } from '../../services/climateDataService';
 import './ClimateDataViewer.css';
+import type { Feature, FeatureCollection, Geometry } from 'geojson';
 
 interface ClimateDataViewerProps {
   map: mapboxgl.Map | null;
@@ -17,13 +17,13 @@ export const ClimateDataViewer: React.FC<ClimateDataViewerProps> = ({ map, isVis
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [opacity, setOpacity] = useState(0.7);
-  
+
   // Spatial bounds (default: Campos do Sudeste - Santos a Campos)
   const [latMin, setLatMin] = useState(-25.0);
   const [latMax, setLatMax] = useState(-20.0);
   const [lonMin, setLonMin] = useState(-45.0);
   const [lonMax, setLonMax] = useState(-39.0);
-  
+
   const heatmapLayerId = 'climate-heatmap';
   const heatmapSourceId = 'climate-heatmap-source';
 
@@ -32,7 +32,20 @@ export const ClimateDataViewer: React.FC<ClimateDataViewerProps> = ({ map, isVis
     const loadVariables = async () => {
       try {
         const data = await climateDataService.getVariables();
-        setVariables(data.descriptions);
+        if (data.descriptions && typeof data.descriptions === 'object') {
+          const transformedDescriptions = Object.entries(data.descriptions).reduce(
+            (acc, [key, value]) => {
+              if (typeof value === 'string') {
+                acc[key] = value;
+              }
+              return acc;
+            },
+            {} as Record<string, string>
+          );
+          setVariables(transformedDescriptions);
+        } else {
+          throw new Error('Invalid data format for descriptions');
+        }
       } catch (err) {
         setError(`Failed to load variables: ${err}`);
       }
@@ -49,18 +62,14 @@ export const ClimateDataViewer: React.FC<ClimateDataViewerProps> = ({ map, isVis
       setError(null);
 
       try {
-        const bounds: SpatialBounds = {
-          lat_min: latMin,
-          lat_max: latMax,
-          lon_min: lonMin,
-          lon_max: lonMax
-        };
-
         // Get grid data for selected date and variable
         const gridData = await climateDataService.getSnapshot(
           selectedVariable,
           `${selectedDate}T00:00:00`,
-          bounds
+          latMin,
+          latMax,
+          lonMin,
+          lonMax
         );
 
         // Get statistics
@@ -69,7 +78,10 @@ export const ClimateDataViewer: React.FC<ClimateDataViewerProps> = ({ map, isVis
             selectedVariable,
             selectedDate,
             selectedDate,
-            bounds
+            latMin,
+            latMax,
+            lonMin,
+            lonMax
           );
           setStatistics(stats);
         } catch (err) {
@@ -78,11 +90,7 @@ export const ClimateDataViewer: React.FC<ClimateDataViewerProps> = ({ map, isVis
         }
 
         // Create GeoJSON from grid data
-        const features = createHeatmapFeatures(gridData);
-        const geojson = {
-          type: 'FeatureCollection' as const,
-          features,
-        };
+        const geojson = createHeatmapFeatures(gridData);
 
         // Add or update source
         if (map.getSource(heatmapSourceId)) {
@@ -94,7 +102,9 @@ export const ClimateDataViewer: React.FC<ClimateDataViewerProps> = ({ map, isVis
           });
 
           // Calculate min/max from data
-          const values = features.map(f => f.properties.value).filter(v => v !== null && !isNaN(v));
+          const values = geojson.features
+            .map((f) => f.properties?.value)
+            .filter((v): v is number => v !== null && v !== undefined && !isNaN(v));
           const dataMin = Math.min(...values);
           const dataMax = Math.max(...values);
 
@@ -105,15 +115,7 @@ export const ClimateDataViewer: React.FC<ClimateDataViewerProps> = ({ map, isVis
               type: 'heatmap',
               source: heatmapSourceId,
               paint: {
-                'heatmap-weight': [
-                  'interpolate',
-                  ['linear'],
-                  ['get', 'value'],
-                  dataMin,
-                  0,
-                  dataMax,
-                  1,
-                ],
+                'heatmap-weight': ['interpolate', ['linear'], ['get', 'value'], dataMin, 0, dataMax, 1],
                 'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 0, 1, 9, 3],
                 'heatmap-color': [
                   'interpolate',
@@ -125,35 +127,23 @@ export const ClimateDataViewer: React.FC<ClimateDataViewerProps> = ({ map, isVis
                   '#419bf9',
                   0.4,
                   '#19e3f5',
-                  0.6,
-                  '#76ee00',
-                  0.8,
-                  '#f5a900',
-                  1,
-                  '#ff0000',
                 ],
-                'heatmap-radius': ['interpolate', ['linear'], ['zoom'], 0, 2, 9, 20],
-                'heatmap-opacity': opacity,
               },
-            },
-            'water'
+            }
           );
         }
-
-        // Update layer opacity
-        map.setPaintProperty(heatmapLayerId, 'heatmap-opacity', opacity);
       } catch (err) {
-        setError(`Failed to load heatmap: ${err}`);
+        setError(`Failed to fetch heatmap: ${err}`);
       } finally {
         setLoading(false);
       }
     };
 
     fetchAndDisplayHeatmap();
-  }, [map, isVisible, selectedVariable, selectedDate, opacity, latMin, latMax, lonMin, lonMax]);
+  }, [map, isVisible, selectedVariable, selectedDate, latMin, latMax, lonMin, lonMax]);
 
-  const createHeatmapFeatures = (gridData: SnapshotData) => {
-    const features = [];
+  const createHeatmapFeatures = (gridData: SnapshotData): FeatureCollection<Geometry> => {
+    const features: Feature<Geometry, { value: number }>[] = [];
     const { lat, lon, values } = gridData;
 
     for (let i = 0; i < lat.length; i++) {
@@ -173,7 +163,10 @@ export const ClimateDataViewer: React.FC<ClimateDataViewerProps> = ({ map, isVis
       }
     }
 
-    return features;
+    return {
+      type: 'FeatureCollection',
+      features,
+    };
   };
 
   const toggleHeatmap = () => {

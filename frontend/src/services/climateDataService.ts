@@ -26,11 +26,24 @@ export interface Statistics {
   std: number;
 }
 
+export interface SnapshotData {
+  lat: number[];
+  lon: number[];
+  values: number[][];
+}
+
+export interface SpatialBounds {
+  lat_min: number;
+  lat_max: number;
+  lon_min: number;
+  lon_max: number;
+}
+
 export const climateDataService = {
   async getVariables(): Promise<Record<string, string>> {
     const response = await fetch(`${API_BASE}/variables`);
     const data = await response.json();
-    return data.descriptions;
+    return data.descriptions || {}; // Ensure it returns an object
   },
 
   async getMetadata() {

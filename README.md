@@ -182,4 +182,4 @@ Objetivo:
 
 ## Última atualização
 
-- 20/02/2026
+- 25/02/2026

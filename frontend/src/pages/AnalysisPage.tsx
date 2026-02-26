@@ -13,545 +13,221 @@ import { Bar, Line } from 'react-chartjs-2';
 import * as shapefile from 'shapefile';
 import { analysisService, MultiRiskResult, WindScenarioComparisonResult, WaveScenarioComparisonResult } from '../services/analysisService';
 import Map from '../components/Map/Map';
+
+import { useState } from 'react';
 import './AnalysisPage.css';
-import { VisualizationConfig } from '../components/SideDrawer/SideDrawer';
+import { analysisService, ClimateRiskResult } from '../services/analysisService';
 
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  PointElement,
-  LineElement,
-  Tooltip,
-  Legend,
-);
+const AnalysisPage = () => {
+  // Localização
+  const [lat, setLat] = useState<number>(-23.5);
+  const [lon, setLon] = useState<number>(-45.0);
 
-interface AnalysisPageProps {
-  selectedPoint: { lat: number; lon: number } | null;
-  onPointSelect: (point: { lat: number; lon: number }) => void;
-  config: VisualizationConfig | null;
-  onSaveAsset?: (asset: {
-    id: string;
-    name: string;
-    createdAt: string;
-    point: { lat: number; lon: number };
-    period: { start: string; end: string };
-    risks: string[];
-    summary: {
-      operationalHours: number;
-      attentionHours: number;
-      stopHours: number;
-      totalHours: number;
-      estimatedAssetImpact: number;
-      annualEbitda: number;
-      annualEbitdaImpact: number;
-      annualEbitdaAfterRisk: number;
-      vplImpact: number;
-      discountRate: number;
-      horizonYears: number;
-    };
-  }) => void;
-}
+  // Dados do ativo
+  const [assetType, setAssetType] = useState<string>('offshore_platform');
+  const [assetValue, setAssetValue] = useState<number>(1000000000);
 
-type RiskId = 'wind' | 'wave' | 'flood' | 'heatwave' | 'temperature' | 'current';
+  // Período de análise
+  const [startDate, setStartDate] = useState<string>('2020-01-01');
+  const [endDate, setEndDate] = useState<string>('2023-12-31');
 
-const RISK_OPTIONS: Array<{ id: RiskId; label: string }> = [
-  { id: 'wind', label: 'Vento' },
-  { id: 'wave', label: 'Onda' },
-  { id: 'flood', label: 'Inundação' },
-  { id: 'heatwave', label: 'Ondas Térmicas' },
-  { id: 'temperature', label: 'Temperatura' },
-  { id: 'current', label: 'Corrente' },
-];
+  // Riscos selecionados
+  const [hazards, setHazards] = useState<string[]>(['wind', 'wave']);
 
-type NamedLocationSource = 'campos_producao' | 'blocos_exploratorios';
+  // Resultados
+  const [result, setResult] = useState<ClimateRiskResult | null>(null);
+  const [loading, setLoading] = useState<boolean>(false);
 
-interface NamedLocation {
-  key: string;
-  name: string;
-  source: NamedLocationSource;
-  point: { lat: number; lon: number };
-  bounds: {
-    minLon: number;
-    minLat: number;
-    maxLon: number;
-    maxLat: number;
-  };
-}
-
-const NAME_FIELD_CANDIDATES = [
-  'NOME',
-  'NOME_CAMPO',
-  'NM_CAMPO',
-  'CAMPO',
-  'BLOCO',
-  'NOME_BLOCO',
-  'NM_BLOCO',
-  'SIGLA',
-  'NOMECAMPO',
-  'NOMEBLOCO',
-];
-
-const normalizeFieldKey = (value: string) => value
-  .normalize('NFD')
-  .replace(/[\u0300-\u036f]/g, '')
-  .replace(/[^A-Z0-9]/gi, '')
-  .toUpperCase();
-
-const sanitizeValue = (value: unknown) => String(value ?? '').replace(/\u0000/g, '').trim();
-
-const hasLetters = (value: string) => /[A-Za-zÀ-ÿ]/.test(value);
-
-const extractCoordinates = (geometry: any): [number, number][] => {
-  const coords: [number, number][] = [];
-
-  const walk = (value: any) => {
-    if (!Array.isArray(value)) return;
-    if (
-      value.length >= 2
-      && typeof value[0] === 'number'
-      && typeof value[1] === 'number'
-      && Number.isFinite(value[0])
-      && Number.isFinite(value[1])
-    ) {
-      coords.push([value[0], value[1]]);
-      return;
-    }
-
-    value.forEach(walk);
-  };
-
-  walk(geometry?.coordinates);
-  return coords;
-};
-
-const centroidFromGeometry = (geometry: any): { lat: number; lon: number } | null => {
-  const coords = extractCoordinates(geometry);
-  if (!coords.length) return null;
-
-  let minLon = Number.POSITIVE_INFINITY;
-  let maxLon = Number.NEGATIVE_INFINITY;
-  let minLat = Number.POSITIVE_INFINITY;
-  let maxLat = Number.NEGATIVE_INFINITY;
-
-  coords.forEach(([lon, lat]) => {
-    if (!Number.isFinite(lon) || !Number.isFinite(lat)) return;
-    minLon = Math.min(minLon, lon);
-    maxLon = Math.max(maxLon, lon);
-    minLat = Math.min(minLat, lat);
-    maxLat = Math.max(maxLat, lat);
-  });
-
-  if (
-    !Number.isFinite(minLon)
-    || !Number.isFinite(maxLon)
-    || !Number.isFinite(minLat)
-    || !Number.isFinite(maxLat)
-  ) {
-    return null;
-  }
-
-  return {
-    lat: (minLat + maxLat) / 2,
-    lon: (minLon + maxLon) / 2,
-  };
-};
-
-const boundsFromGeometry = (
-  geometry: any,
-): {
-  minLon: number;
-  minLat: number;
-  maxLon: number;
-  maxLat: number;
-} | null => {
-  const coords = extractCoordinates(geometry);
-  if (!coords.length) return null;
-
-  let minLon = Number.POSITIVE_INFINITY;
-  let maxLon = Number.NEGATIVE_INFINITY;
-  let minLat = Number.POSITIVE_INFINITY;
-  let maxLat = Number.NEGATIVE_INFINITY;
-
-  coords.forEach(([lon, lat]) => {
-    if (!Number.isFinite(lon) || !Number.isFinite(lat)) return;
-    minLon = Math.min(minLon, lon);
-    maxLon = Math.max(maxLon, lon);
-    minLat = Math.min(minLat, lat);
-    maxLat = Math.max(maxLat, lat);
-  });
-
-  if (
-    !Number.isFinite(minLon)
-    || !Number.isFinite(maxLon)
-    || !Number.isFinite(minLat)
-    || !Number.isFinite(maxLat)
-  ) {
-    return null;
-  }
-
-  return { minLon, minLat, maxLon, maxLat };
-};
-
-const pickFeatureName = (properties: Record<string, any>, fallbackPrefix: string, index: number) => {
-  const entries = Object.entries(properties || {}).map(([key, value]) => ({
-    key,
-    normalizedKey: normalizeFieldKey(key),
-    value: sanitizeValue(value),
-  }));
-
-  for (const fieldName of NAME_FIELD_CANDIDATES) {
-    const normalizedTarget = normalizeFieldKey(fieldName);
-    const match = entries.find((entry) => entry.normalizedKey === normalizedTarget && hasLetters(entry.value));
-    if (match?.value) {
-      return match.value;
-    }
-  }
-
-  const semanticKeyMatch = entries.find(
-    (entry) => (
-      (entry.normalizedKey.includes('NOME')
-      || entry.normalizedKey.includes('CAMPO')
-      || entry.normalizedKey.includes('BLOCO')
-      || entry.normalizedKey.includes('NOM'))
-      && hasLetters(entry.value)
-    ),
-  );
-  if (semanticKeyMatch?.value) {
-    return semanticKeyMatch.value;
-  }
-
-  const firstTextualValue = entries.find(
-    (entry) => hasLetters(entry.value)
-      && !entry.normalizedKey.startsWith('ID')
-      && !entry.normalizedKey.startsWith('CD')
-      && !entry.normalizedKey.includes('CODIGO'),
-  );
-  if (firstTextualValue?.value) {
-    return firstTextualValue.value;
-  }
-
-  return `${fallbackPrefix} ${index + 1}`;
-};
-
-const loadNamedLocationsFromShapefile = async (
-  shpUrl: string,
-  dbfUrl: string,
-  source: NamedLocationSource,
-  fallbackPrefix: string,
-): Promise<NamedLocation[]> => {
-  const sourceReader = await shapefile.open(shpUrl, dbfUrl);
-  const items: NamedLocation[] = [];
-  let result = await sourceReader.read();
-  let idx = 0;
-
-  while (!result.done) {
-    const feature = result.value;
-    const center = centroidFromGeometry(feature?.geometry);
-    const bounds = boundsFromGeometry(feature?.geometry);
-    if (center && bounds) {
-      const name = pickFeatureName(feature?.properties || {}, fallbackPrefix, idx);
-      items.push({
-        key: `${source}-${name}-${idx}`,
-        name,
-        source,
-        point: center,
-        bounds,
+  const handleRunAnalysis = async () => {
+    setLoading(true);
+    try {
+      const data = await analysisService.runClimateRiskOffshore({
+        lat,
+        lon,
+        asset_type: assetType,
+        asset_value: assetValue,
+        hazards,
+        wind_operational_max: 15,
+        wind_attention_max: 20,
+        wave_operational_max: 2,
+        wave_attention_max: 4,
+        enable_scenarios: false,
+        start_time: startDate,
+        end_time: endDate,
       });
+      setResult(data);
+    } catch (error) {
+      alert('Erro ao executar análise de risco climático.');
+    } finally {
+      setLoading(false);
     }
+  };
 
-    idx += 1;
-    result = await sourceReader.read();
-  }
+  return (
+    <div className="analysis-page">
+      <header className="page-header">
+        <h1>Análise de Risco Climático</h1>
+        <p className="page-subtitle">
+          Calcule o risco climático para ativos offshore baseado em condições históricas e limites operacionais
+        </p>
+      </header>
 
-  return items;
-};
+      <div className="page-content">
+        {/* Localização */}
+        <section className="map-section">
+          <div className="location-input">
+            <h3>Localização do Ativo</h3>
+            <div className="form-row">
+              <div className="form-group">
+                <label>Latitude</label>
+                <input
+                  type="number"
+                  value={lat}
+                  onChange={(e) => setLat(Number(e.target.value))}
+                  step="0.0001"
+                />
+              </div>
+              <div className="form-group">
+                <label>Longitude</label>
+                <input
+                  type="number"
+                  value={lon}
+                  onChange={(e) => setLon(Number(e.target.value))}
+                  step="0.0001"
+                />
+              </div>
+            </div>
+          </div>
+        </section>
 
-const defaultLimitsByRisk: Record<RiskId, { operational: number; attention: number }> = {
-  wind: { operational: 15, attention: 20 },
-  wave: { operational: 2, attention: 4 },
-  flood: { operational: 1, attention: 2 },
-  heatwave: { operational: 3, attention: 7 },
-  temperature: { operational: 30, attention: 35 },
-  current: { operational: 1, attention: 2 },
-};
+        {/* Formulário */}
+        <section className="form-section">
+          <div className="form-card">
+            <h2>Dados do Ativo</h2>
+            <div className="form-group">
+              <label>Tipo de Ativo</label>
+              <select
+                value={assetType}
+                onChange={(e) => setAssetType(e.target.value)}
+              >
+                <option value="offshore_platform">Plataforma Offshore</option>
+                <option value="floating_unit">Unidade Flutuante</option>
+                <option value="pipeline">Duto Submarino</option>
+                <option value="support_vessel">Embarcação de Apoio</option>
+              </select>
+            </div>
+            <div className="form-group">
+              <label>Valor do Ativo (BRL)</label>
+              <input
+                type="number"
+                value={assetValue}
+                onChange={(e) => setAssetValue(Number(e.target.value))}
+                min="0"
+                step="1000000"
+              />
+            </div>
+          </div>
 
-type HelpKey =
-  | 'asset_name'
-  | 'point'
-  | 'named_location'
-  | 'period_start'
-  | 'period_end'
-  | 'asset_value'
-  | 'annual_ebitda'
-  | 'discount_rate'
-  | 'horizon_years'
-  | 'combine_mode'
-  | 'exceedance_method'
-  | 'risk_load_method'
-  | 'risk_quantile'
-  | 'attention_loss_factor'
-  | 'stop_loss_factor'
-  | 'expense_ratio'
-  | 'multiplier'
-  | 'weight'
-  | 'operational_limit'
-  | 'attention_limit'
-  | 'summary'
-  | 'exposure_overview'
-  | 'exposure_plot'
-  | 'exposure_basemap'
-  | 'exposure_scatter'
-  | 'exposure_hexbin'
-  | 'exposure_raster';
+          <div className="form-card">
+            <h2>Período de Análise</h2>
+            <div className="form-row">
+              <div className="form-group">
+                <label>Data Inicial</label>
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                />
+              </div>
+              <div className="form-group">
+                <label>Data Final</label>
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                />
+              </div>
+            </div>
+          </div>
 
-const HELP_CONTENT: Record<HelpKey, { title: string; body: string[] }> = {
-  asset_name: {
-    title: 'Nome do ativo',
-    body: [
-      'Definição: Identificador do ativo analisado (ex.: ALBACORA, P-35).',
-      'Aplicação: Esse nome é usado ao salvar resultados em Meus Ativos.',
-      'Boas práticas: Use nomes curtos e padronizados para facilitar comparação entre análises.',
-    ],
-  },
-  point: {
-    title: 'Ponto selecionado',
-    body: [
-      'Definição: Coordenada geográfica usada para extrair a série temporal do grid climático.',
-      'Aplicação: Todos os cálculos (status, curva de excedência, métricas e precificação) usam esse ponto.',
-      'Impacto na análise: Alterar o ponto muda completamente o histórico observado e, portanto, o risco calculado.',
-    ],
-  },
-  named_location: {
-    title: 'Selecionar campo/bloco por nome',
-    body: [
-      'Definição: Lista de nomes vindos dos metadados dos shapefiles de Campos de Produção e Blocos Exploratórios.',
-      'Aplicação: Ao selecionar um item, o sistema define automaticamente o ponto no centro da área e aproxima o mapa.',
-      'Observação: Você pode ignorar a lista e clicar no mapa para escolher manualmente outro ponto.',
-    ],
-  },
-  period_start: {
-    title: 'Período inicial',
-    body: [
-      'Definição: Data de início da amostra histórica.',
-      'Aplicação: Determina quais observações entram no cálculo das métricas.',
-      'Boas práticas: Use períodos longos para maior robustez; use períodos curtos para análises operacionais táticas.',
-    ],
-  },
-  period_end: {
-    title: 'Período final',
-    body: [
-      'Definição: Data final da amostra histórica.',
-      'Aplicação: Junto com a data inicial, define o tamanho da base estatística.',
-      'Impacto na análise: Períodos diferentes podem alterar bastante as caudas (eventos extremos) e o prêmio técnico.',
-    ],
-  },
-  asset_value: {
-    title: 'Valor do ativo',
-    body: [
-      'Definição: Valor econômico exposto do ativo (R$).',
-      'Aplicação: Converte risco físico/operacional em perda monetária esperada.',
-      'Onde aparece: AAL, VaR, TVaR, PML, prêmio puro e prêmio técnico.',
-    ],
-  },
-  annual_ebitda: {
-    title: 'EBITDA anual (R$)',
-    body: [
-      'Definição: EBITDA anual de referência do ativo.',
-      'Aplicação: Estima impacto anual de risco e EBITDA pós-risco no resumo consolidado.',
-      'Interpretação: Quanto maior o EBITDA, maior o impacto monetário absoluto para a mesma severidade de risco.',
-    ],
-  },
-  discount_rate: {
-    title: 'Taxa de desconto',
-    body: [
-      'Definição: Taxa usada para trazer impactos futuros a valor presente.',
-      'Aplicação: Entra no cálculo do VPL do impacto econômico de risco.',
-      'Boas práticas: Use taxa consistente com o padrão financeiro da companhia/projeto.',
-    ],
-  },
-  horizon_years: {
-    title: 'Horizonte (anos)',
-    body: [
-      'Definição: Número de anos considerado para o cálculo acumulado de impacto.',
-      'Aplicação: Junto com a taxa de desconto, determina o VPL do impacto no período.',
-      'Interpretação: Horizontes maiores aumentam o efeito acumulado, principalmente com risco recorrente.',
-    ],
-  },
-  combine_mode: {
-    title: 'Combinação de riscos',
-    body: [
-      'Worst Case: Em cada hora, usa o pior status entre os riscos selecionados. É o modo mais conservador.',
-      'Weighted: Calcula uma combinação ponderada dos status por risco usando pesos definidos por você.',
-      'Multiplier: Aplica penalização adicional quando há coocorrência de condições críticas entre riscos.',
-      'Quando usar: Worst para segurança máxima; Weighted para calibrar importância relativa; Multiplier para cenários com efeito composto.',
-    ],
-  },
-  exceedance_method: {
-    title: 'Método de excedência',
-    body: [
-      'Weibull: Método empírico clássico (rank/(n+1)). Robusto e simples para uso geral.',
-      'Hazen: Usa ajuste (rank-0.5)/n. Costuma centralizar melhor a distribuição em séries moderadas.',
-      'Gringorten: Usa (rank-0.44)/(n+0.12). Muito usado em hidrologia e extremos por melhor ajuste de cauda.',
-      'Impacto prático: A curva de excedência muda levemente, principalmente nas extremidades (eventos raros).',
-    ],
-  },
-  risk_load_method: {
-    title: 'Carga de risco',
-    body: [
-      'None: Sem carga adicional; prêmio técnico fica mais próximo do prêmio puro + despesas.',
-      'VaR: Usa perda no quantil escolhido (ex.: 95%). Captura um nível de perda “limite”.',
-      'TVaR: Média das perdas acima do VaR (cauda). Mais conservador para eventos extremos.',
-      'Stdev: Usa volatilidade da perda como proxy de incerteza/riscos de oscilação.',
-      'Quando usar: TVaR para proteção de cauda; VaR para limite probabilístico; Stdev para visão de dispersão.',
-    ],
-  },
-  risk_quantile: {
-    title: 'Quantil de risco',
-    body: [
-      'Definição: Percentil de referência para VaR/TVaR (ex.: 0.95 = 95%).',
-      'Exemplo: VaR 95% é a perda que só é superada em ~5% dos cenários.',
-      'Impacto no preço: Quantis maiores aumentam foco em extremos e tendem a elevar carga de risco.',
-    ],
-  },
-  attention_loss_factor: {
-    title: 'Fator perda atenção',
-    body: [
-      'Definição: Fração de perda aplicada quando condição está em atenção.',
-      'Exemplo: 0.35 significa 35% da base de perda em períodos classificados como atenção.',
-      'Uso: Ajuda a refletir impacto parcial de degradação operacional antes da parada total.',
-    ],
-  },
-  stop_loss_factor: {
-    title: 'Fator perda parada',
-    body: [
-      'Definição: Fração de perda aplicada em condição de parada.',
-      'Regra típica: Deve ser maior ou igual ao fator de atenção.',
-      'Uso: Representa severidade econômica de indisponibilidade total.',
-    ],
-  },
-  expense_ratio: {
-    title: 'Expense ratio',
-    body: [
-      'Definição: Percentual de despesas operacionais/comerciais sobre o prêmio puro.',
-      'Aplicação: Prêmio técnico = prêmio puro + carga de risco + despesas.',
-      'Exemplo: 0.15 adiciona 15% de despesas sobre a base atuarial.',
-    ],
-  },
-  multiplier: {
-    title: 'Multiplicador',
-    body: [
-      'Definição: Fator de ampliação para coocorrência de riscos no modo Multiplier.',
-      'Interpretação: 1.0 não altera; >1 aumenta penalização quando riscos críticos aparecem juntos.',
-      'Uso recomendado: Cenários de risco composto, onde impacto conjunto é maior que soma simples.',
-    ],
-  },
-  weight: {
-    title: 'Peso do risco',
-    body: [
-      'Definição: Importância relativa de cada risco no modo Weighted.',
-      'Interpretação: Peso maior = risco influencia mais o status combinado.',
-      'Exemplo: Peso vento 1.5 e onda 1.0 torna vento mais determinante no resultado final.',
-    ],
-  },
-  operational_limit: {
-    title: 'Limite operacional',
-    body: [
-      'Definição: Limite superior da zona operacional.',
-      'Regra: Valor abaixo desse limite é classificado como operacional.',
-      'Transição: Entre operacional e atenção, status passa para atenção.',
-    ],
-  },
-  attention_limit: {
-    title: 'Limite atenção',
-    body: [
-      'Definição: Limite que separa atenção de parada.',
-      'Regra: Valores acima desse limite entram em parada.',
-      'Consistência: Deve ser maior ou igual ao limite operacional.',
-    ],
-  },
-  summary: {
-    title: 'Resumo Consolidado',
-    body: [
-      'Horas Operacionais/Atenção/Parada: Quantidade de horas em cada faixa de severidade no risco combinado.',
-      'Impacto Estimado: Aproximação rápida dada por valor do ativo × fração de horas em parada.',
-      'AAL (Average Annual Loss): Perda anual esperada média. É a base clássica de prêmio puro.',
-      'PML (Probable Maximum Loss): Perda máxima provável no período anualizado, útil para limite de exposição.',
-      'VaR (Value at Risk): Perda no quantil selecionado (ex.: 95%). Mede limite probabilístico.',
-      'TVaR (Tail Value at Risk): Média das perdas acima do VaR. Mede severidade da cauda extrema.',
-      'Prêmio puro: Componente atuarial base (normalmente ligado ao AAL).',
-      'Prêmio técnico: Prêmio puro acrescido de despesas e carga de risco conforme método escolhido.',
-    ],
-  },
-  exposure_overview: {
-    title: 'Exposure por Localização',
-    body: [
-      'Definição: Bloco que mostra como as exposições se distribuem no território, usando o shapefile mais próximo do ponto analisado.',
-      'Fonte espacial: O sistema seleciona automaticamente um shapefile de referência e plota limites e pontos derivados dessa geometria.',
-      'Leitura recomendada: Compare os 5 gráficos para entender padrão espacial, densidade e concentração das exposições.',
-    ],
-  },
-  exposure_plot: {
-    title: 'Exposição - Pontos de referência',
-    body: [
-      'O que mostra: Distribuição espacial básica das exposições em pontos.',
-      'Quando usar: Visão rápida de onde os ativos estão localizados.',
-      'Interpretação: Padrões espalhados indicam exposição difusa; clusters sugerem concentração de risco em subáreas.',
-    ],
-  },
-  exposure_basemap: {
-    title: 'Exposição com contorno de referência',
-    body: [
-      'O que mostra: Pontos de exposição sobre o contorno do shapefile de referência.',
-      'Quando usar: Validar coerência espacial entre ponto analisado e área operacional.',
-      'Interpretação: Pontos próximos ao limite podem indicar sensibilidade a mudanças de fronteira ou seleção de área.',
-    ],
-  },
-  exposure_scatter: {
-    title: 'Scatter de exposição',
-    body: [
-      'O que mostra: Pontos com variação visual de intensidade relativa (cor/tamanho).',
-      'Quando usar: Destacar hotspots locais de maior peso relativo.',
-      'Interpretação: Pontos mais intensos representam maior contribuição relativa de exposição no conjunto amostrado.',
-    ],
-  },
-  exposure_hexbin: {
-    title: 'Hexbin / densidade de exposição',
-    body: [
-      'O que mostra: Agrupamento espacial por células, enfatizando densidade de ocorrências.',
-      'Quando usar: Identificar regiões com alta concentração de exposição sem ruído de ponto-a-ponto.',
-      'Interpretação: Células mais escuras/maiores indicam maior densidade e potencial concentração de impacto.',
-    ],
-  },
-  exposure_raster: {
-    title: 'Raster de exposição',
-    body: [
-      'O que mostra: Superfície contínua em grade com intensidade espacial de exposição.',
-      'Quando usar: Leitura regional de gradientes (áreas mais quentes x mais frias).',
-      'Interpretação: Tons mais fortes representam maior presença relativa de exposição naquela célula da grade.',
-    ],
-  },
-};
+          <div className="form-card">
+            <h2>Riscos Considerados</h2>
+            <div className="form-group">
+              <label>
+                <input
+                  type="checkbox"
+                  checked={hazards.includes('wind')}
+                  onChange={(e) => {
+                    setHazards((prev) =>
+                      e.target.checked
+                        ? [...prev, 'wind']
+                        : prev.filter((h) => h !== 'wind')
+                    );
+                  }}
+                />
+                Vento
+              </label>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={hazards.includes('wave')}
+                  onChange={(e) => {
+                    setHazards((prev) =>
+                      e.target.checked
+                        ? [...prev, 'wave']
+                        : prev.filter((h) => h !== 'wave')
+                    );
+                  }}
+                />
+                Onda
+              </label>
+            </div>
+          </div>
 
-const HelpIconButton: React.FC<{ onClick: () => void; label: string }> = ({ onClick, label }) => (
-  <button type="button" className="info-icon-btn" onClick={onClick} aria-label={label} title={label}>
-    i
-  </button>
-);
+          <button
+            className="run-analysis-btn"
+            onClick={handleRunAnalysis}
+            disabled={loading}
+          >
+            {loading ? 'Analisando...' : 'Executar análise de risco climático'}
+          </button>
+        </section>
 
-const HelpModal: React.FC<{ title: string; body: string[]; onClose: () => void }> = ({ title, body, onClose }) => (
-  <div className="help-modal-overlay" onClick={onClose}>
-    <div className="help-modal" onClick={(e) => e.stopPropagation()}>
-      <div className="help-modal-header">
-        <h4>{title}</h4>
-        <button type="button" className="help-close-btn" onClick={onClose}>×</button>
+        {/* Resultados */}
+        {result && (
+          <section className="results-section">
+            <h2>Resultados da análise</h2>
+            <div className="results-grid">
+              <div className="result-card">
+                <h3>Métricas Financeiras</h3>
+                <div className="metric">
+                  <span className="label">AAL</span>
+                  <span className="value">{(result.aal || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                </div>
+                <div className="metric">
+                  <span className="label">PML</span>
+                  <span className="value">{(result.pml || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                </div>
+              </div>
+              {/* Adicione mais cards de resultado conforme necessário */}
+            </div>
+            {result.insights && result.insights.length > 0 && (
+              <div className="info-box">
+                <ul>
+                  {result.insights.map((insight, idx) => (
+                    <li key={idx}>{insight}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </section>
+        )}
       </div>
-      <ul className="help-modal-list">
-        {body.map((line) => {
-          const parts = line.split(':');
-          const topic = parts[0] || '';
-          const detail = parts.slice(1).join(':').trim();
-          return (
+    </div>
+  );
+};
+
+export default AnalysisPage;
             <li key={line}>
               <strong>{topic}:</strong> {detail}
             </li>
@@ -1643,6 +1319,46 @@ const AnalysisPage: React.FC<AnalysisPageProps> = ({ selectedPoint, onPointSelec
                 </div>
               </div>
             )}
+
+            {result.pricing_models?.petals_appendix?.petals_labels?.length ? (
+              <>
+                <p className="analysis-hint" style={{ marginTop: 12 }}>
+                  Motor de precificação: <strong>{result.pricing_models.pricing_engine || result.pricing_engine || 'climada'}</strong>
+                  {' '}| PETALS habilitado: <strong>{result.petals_enabled ? 'Sim' : 'Não'}</strong>
+                </p>
+                <div className="analysis-card analysis-chart-card" style={{ marginTop: 12 }}>
+                  <h3>PETALS Appendix (quantis normalizados)</h3>
+                  <Bar
+                    data={{
+                      labels: result.pricing_models.petals_appendix.petals_labels,
+                      datasets: [
+                        {
+                          label: 'PETALS',
+                          data: result.pricing_models.petals_appendix.petals_values,
+                          backgroundColor: '#22c55e',
+                        },
+                      ],
+                    }}
+                    options={{
+                      responsive: true,
+                      maintainAspectRatio: false,
+                      plugins: { legend: { display: true } },
+                      scales: {
+                        y: { min: 0, max: 1 },
+                      },
+                    }}
+                  />
+                </div>
+                {!!result.pricing_models.petals_appendix.petals_raw_values?.length && (
+                  <p className="analysis-hint" style={{ marginTop: 8 }}>
+                    Leitura do gráfico PETALS: cada barra é um quantil de perda (Q50, Q75, Q90, Q95, Q99) normalizado entre 0 e 1.
+                    Valores monetários brutos (BRL): {result.pricing_models.petals_appendix.petals_raw_values.map((v) =>
+                      v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+                    ).join(' | ')}.
+                  </p>
+                )}
+              </>
+            ) : null}
           </div>
         </section>
       )}
@@ -1888,21 +1604,30 @@ const AnalysisPage: React.FC<AnalysisPageProps> = ({ selectedPoint, onPointSelec
               <h3>Rosa dos Ventos por Intensidade</h3>
               {result.wind_rose?.counts?.length && result.wind_rose?.direction_labels?.length ? (
                 <ChartExpandButton
-                  onClick={() =>
+                  onClick={() => {
+                    const windRose = result?.wind_rose;
+                    if (!windRose?.counts?.length || !windRose?.direction_labels?.length) return;
+
+                    const directionLabels = windRose.direction_labels.map((label) => String(label ?? ''));
+                    const totalCounts = windRose.counts.map((count) => Number(count ?? 0));
+                    const operationalCounts = (windRose.operational_counts ?? windRose.counts.map(() => 0)).map((count) => Number(count ?? 0));
+                    const attentionCounts = (windRose.attention_counts ?? windRose.counts.map(() => 0)).map((count) => Number(count ?? 0));
+                    const stopCounts = (windRose.stop_counts ?? windRose.counts.map(() => 0)).map((count) => Number(count ?? 0));
+
                     setExpandedChart({
                       title: 'Rosa dos Ventos por Intensidade',
                       content: (
                         <ThresholdWindRose
-                          directionLabels={result.wind_rose.direction_labels}
-                          totalCounts={result.wind_rose.counts}
-                          operationalCounts={result.wind_rose.operational_counts ?? result.wind_rose.counts.map(() => 0)}
-                          attentionCounts={result.wind_rose.attention_counts ?? result.wind_rose.counts.map(() => 0)}
-                          stopCounts={result.wind_rose.stop_counts ?? result.wind_rose.counts.map(() => 0)}
+                          directionLabels={directionLabels}
+                          totalCounts={totalCounts}
+                          operationalCounts={operationalCounts}
+                          attentionCounts={attentionCounts}
+                          stopCounts={stopCounts}
                           size={760}
                         />
                       ),
-                    })
-                  }
+                    });
+                  }}
                   label="Ampliar rosa dos ventos"
                 />
               ) : null}
