@@ -79,62 +79,6 @@ OceanValue/
 └─ README.md
 ```
 
----
-
-## Pré-requisitos
-
-### Sistema
-- Windows, Linux ou macOS
-- Git
-
-### Backend
-- Python 3.10+
-- `pip` atualizado
-- (Opcional, recomendado) Conda para isolamento de ambiente
-
-### Frontend
-- Node.js 18+
-- npm 9+
-
-### Dados/integrações (quando aplicável)
-- Credenciais CDS (ERA5) para download de temperatura
-- Credenciais Copernicus Marine (CMEMS) para download de corrente
-- Token Mapbox para funcionalidades de mapa no frontend
-
----
-
-## Como rodar localmente
-
-### 1) Backend
-
-```powershell
-cd backend
-pip install -r requirements.txt
-python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
-```
-
-Documentação da API:
-- http://127.0.0.1:8000/docs
-
-### 2) Frontend
-
-```powershell
-cd frontend
-npm install
-npm run dev
-```
-
-Aplicação web:
-- http://127.0.0.1:5173
-
-### 3) Variáveis de ambiente
-
-- Copie `.env.example` para `.env`.
-- Configure no frontend: `VITE_MAPBOX_TOKEN`.
-- Configure no backend as variáveis necessárias para integrações externas.
-
----
-
 ## Stack tecnológico
 
 ### Frontend
