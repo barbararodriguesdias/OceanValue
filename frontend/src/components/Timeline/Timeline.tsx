@@ -56,9 +56,9 @@ const Timeline: React.FC<TimelineProps> = ({
     return varUnit || units[riskType] || '';
   };
 
-  // Generate gradient colors
+  // Generate gradient colors (now returns a single brand color)
   const generateGradient = () => {
-    return 'linear-gradient(to right, #0000FF 0%, #00FFFF 25%, #00FF00 50%, #FFFF00 75%, #FF0000 100%)';
+    return 'var(--brand-vibrant)';
   };
 
   // Update current date when props change

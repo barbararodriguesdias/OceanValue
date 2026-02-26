@@ -1,0 +1,6 @@
+# Pastas e bibliotecas
+node_modules/
+dist/
+.env/
+backend/.venv/
+.venv/

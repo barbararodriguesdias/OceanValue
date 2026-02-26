@@ -7,8 +7,8 @@
 }
 
 .maritime-downtime-page .page-header {
-  background: linear-gradient(140deg, #0f172a 0%, #1e3a5f 55%, #334155 100%);
-  color: #f8fafc;
+  background: var(--brand-primary);
+  color: var(--text-on-primary);
   border-radius: 12px;
   padding: 22px 24px;
   margin-bottom: 20px;
@@ -19,6 +19,7 @@
   margin: 0 0 8px;
   font-size: 1.7rem;
   font-weight: 700;
+  color: var(--text-on-primary);
 }
 
 .maritime-downtime-page .page-subtitle {
@@ -75,9 +76,9 @@
 }
 
 .maritime-downtime-page .mode-toggle button.active {
-  background: #1e3a5f;
-  border-color: #1e3a5f;
-  color: #f8fafc;
+  background: var(--brand-primary);
+  border-color: var(--brand-primary);
+  color: var(--text-on-primary);
 }
 
 .maritime-downtime-page .route-waypoints {
@@ -155,8 +156,8 @@
 .maritime-downtime-page .form-group input:focus,
 .maritime-downtime-page .form-group select:focus {
   outline: none;
-  border-color: #1e3a5f;
-  box-shadow: 0 0 0 2px rgba(30, 58, 95, 0.12);
+  border-color: var(--brand-primary);
+  box-shadow: 0 0 0 2px rgba(0, 74, 100, 0.12);
 }
 
 .maritime-downtime-page .form-row {
@@ -176,14 +177,14 @@
   padding: 12px 14px;
   font-size: 1rem;
   font-weight: 700;
-  background: #1e293b;
-  color: #f8fafc;
+  background: var(--brand-primary);
+  color: var(--text-on-primary);
   cursor: pointer;
   transition: background 0.2s ease;
 }
 
 .maritime-downtime-page .run-analysis-btn:hover:not(:disabled) {
-  background: #0f172a;
+  background: var(--brand-medium);
 }
 
 .maritime-downtime-page .run-analysis-btn:disabled {

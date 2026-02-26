@@ -7,8 +7,8 @@
 }
 
 .climate-risk-page .page-header {
-  background: linear-gradient(140deg, #0b2447 0%, #17375e 55%, #334155 100%);
-  color: #f8fafc;
+  background: var(--brand-primary);
+  color: var(--text-on-primary);
   border-radius: 12px;
   padding: 22px 24px;
   margin-bottom: 20px;
@@ -19,6 +19,7 @@
   margin: 0 0 8px;
   font-size: 1.7rem;
   font-weight: 700;
+  color: var(--text-on-primary);
 }
 
 .climate-risk-page .page-subtitle {
