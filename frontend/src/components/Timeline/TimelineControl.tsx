@@ -55,7 +55,7 @@ const TimelineControl: React.FC<TimelineProps> = ({
   };
 
   const generateGradient = () => {
-    return 'linear-gradient(to right, #0000FF 0%, #00FFFF 25%, #00FF00 50%, #FFFF00 75%, #FF0000 100%)';
+    return 'var(--brand-vibrant)';
   };
 
   useEffect(() => {

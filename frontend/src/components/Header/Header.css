@@ -1,4 +1,4 @@
- .header {
+.header {
   background: var(--brand-primary);
   color: var(--text-on-primary);
   padding: 1rem 2rem;
@@ -23,20 +23,6 @@
   flex-shrink: 0;
 }
 
- .menu-toggle-btn {
-  background: transparent;
-  border: none;
-  color: var(--text-on-primary);
-  font-size: 28px;
-  cursor: pointer;
-  padding: 0;
-  margin-right: 10px;
-  transition: opacity 0.3s ease;
-}
-
-.menu-toggle-btn:hover {
-  opacity: 0.8;
-}
 
 .logo-image {
   height: 50px;
@@ -73,7 +59,8 @@
   align-items: center;
 }
 
- .nav-link {
+
+.nav-link {
   color: var(--text-on-primary);
   text-decoration: none;
   font-size: 0.95rem;
@@ -89,8 +76,10 @@
 }
 
 .nav-link.active {
-  border-bottom: 2px solid rgba(255, 255, 255, 0.9);
+  border-bottom: 2px solid rgba(255,255,255,0.5);
   padding-bottom: 2px;
+  background: transparent;
+  box-shadow: none;
 }
 
 .user-section {

@@ -29,7 +29,8 @@ const Header: React.FC<HeaderProps> = ({ activePage, onNavigate }) => {
           <button
             className={`nav-link ${activePage === 'maritime-downtime' ? 'active' : ''}`}
             onClick={() => onNavigate?.('maritime-downtime')}
-            title="Análise de Downtime Operacional de Embarcações"
+            title="Downtime Marítimo"
+            style={{ fontWeight: 700 }}
           >
             Downtime Marítimo
           </button>
