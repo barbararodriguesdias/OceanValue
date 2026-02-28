@@ -1,3 +1,9 @@
+
+:root {
+  --brand-primary: #006aba;
+  --text-on-primary: #fff;
+}
+
 /* OceanValue App Main Styles */
 
 * {

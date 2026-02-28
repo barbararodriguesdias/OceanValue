@@ -1,6 +1,6 @@
-.header {
-  background: linear-gradient(135deg, #006aba 0%, #d9dbe6 100%);
-  color: white;
+ .header {
+  background: var(--brand-primary);
+  color: var(--text-on-primary);
   padding: 1rem 2rem;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   z-index: 100;
@@ -23,10 +23,10 @@
   flex-shrink: 0;
 }
 
-.menu-toggle-btn {
+ .menu-toggle-btn {
   background: transparent;
   border: none;
-  color: white;
+  color: var(--text-on-primary);
   font-size: 28px;
   cursor: pointer;
   padding: 0;
@@ -50,11 +50,11 @@
   gap: 0.2rem;
 }
 
-.logo {
+ .logo {
   font-size: 1.8rem;
   font-weight: 700;
   margin: 0;
-  color: white;
+  color: var(--text-on-primary);
   white-space: nowrap;
 }
 
@@ -73,8 +73,8 @@
   align-items: center;
 }
 
-.nav-link {
-  color: white;
+ .nav-link {
+  color: var(--text-on-primary);
   text-decoration: none;
   font-size: 0.95rem;
   font-weight: 500;
@@ -100,9 +100,9 @@
   flex-shrink: 0;
 }
 
-.btn-login {
+ .btn-login {
   background: white;
-  color: #006aba;
+  color: var(--brand-primary);
   border: none;
   padding: 0.5rem 1.5rem;
   border-radius: 4px;

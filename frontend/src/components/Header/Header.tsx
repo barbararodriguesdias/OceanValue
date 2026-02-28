@@ -11,6 +11,7 @@ const Header: React.FC<HeaderProps> = ({ activePage, onNavigate }) => {
     <header className="header">
       <div className="header-content">
         <div className="logo-section">
+          <img src="/oceanpact-logo.png" alt="OceanPact Logo" className="logo-image" style={{ marginRight: '18px', height: '40px' }} />
           <div className="logo-text">
             <h1 className="logo">OceanValue</h1>
             <p className="tagline">Climate Risk Pricing for Maritime Operations</p>
@@ -21,6 +22,7 @@ const Header: React.FC<HeaderProps> = ({ activePage, onNavigate }) => {
             className={`nav-link ${activePage === 'climate-risk' ? 'active' : ''}`}
             onClick={() => onNavigate?.('climate-risk')}
             title="Análise de Risco Climático Regional"
+            style={{ fontWeight: 700 }}
           >
             Risco Climático
           </button>
@@ -34,6 +36,7 @@ const Header: React.FC<HeaderProps> = ({ activePage, onNavigate }) => {
           <button
             className={`nav-link ${activePage === 'assets' ? 'active' : ''}`}
             onClick={() => onNavigate?.('assets')}
+            style={{ fontWeight: 700 }}
           >
             Meus Ativos
           </button>
