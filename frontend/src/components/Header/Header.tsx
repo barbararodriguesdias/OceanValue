@@ -2,45 +2,21 @@
 import './Header.css';
 
 interface HeaderProps {
-  onToggleDrawer?: () => void;
-  activePage?: 'map' | 'analysis' | 'assets' | 'maritime-downtime' | 'climate-risk';
-  onNavigate?: (page: 'map' | 'analysis' | 'assets' | 'maritime-downtime' | 'climate-risk') => void;
+  activePage?: 'climate-risk' | 'maritime-downtime' | 'assets';
+  onNavigate?: (page: 'climate-risk' | 'maritime-downtime' | 'assets') => void;
 }
 
-const Header: React.FC<HeaderProps> = ({ onToggleDrawer, activePage, onNavigate }) => {
+const Header: React.FC<HeaderProps> = ({ activePage, onNavigate }) => {
   return (
     <header className="header">
       <div className="header-content">
         <div className="logo-section">
-          <button
-            className="menu-toggle-btn"
-            onClick={onToggleDrawer}
-            title="Toggle Menu"
-            aria-label="Toggle Menu"
-          >
-            &#9776;
-          </button>
           <div className="logo-text">
             <h1 className="logo">OceanValue</h1>
             <p className="tagline">Climate Risk Pricing for Maritime Operations</p>
           </div>
         </div>
-
         <nav className="navigation">
-          <button
-            className={`nav-link ${activePage === 'map' ? 'active' : ''}`}
-            onClick={() => onNavigate?.('map')}
-          >
-            Visualizacao
-          </button>
-          
-          <button
-            className={`nav-link ${activePage === 'maritime-downtime' ? 'active' : ''}`}
-            onClick={() => onNavigate?.('maritime-downtime')}
-            title="Análise de Downtime Operacional de Embarcações"
-          >
-            Downtime Marítimo
-          </button>
           <button
             className={`nav-link ${activePage === 'climate-risk' ? 'active' : ''}`}
             onClick={() => onNavigate?.('climate-risk')}
@@ -49,13 +25,19 @@ const Header: React.FC<HeaderProps> = ({ onToggleDrawer, activePage, onNavigate 
             Risco Climático
           </button>
           <button
+            className={`nav-link ${activePage === 'maritime-downtime' ? 'active' : ''}`}
+            onClick={() => onNavigate?.('maritime-downtime')}
+            title="Análise de Downtime Operacional de Embarcações"
+          >
+            Downtime Marítimo
+          </button>
+          <button
             className={`nav-link ${activePage === 'assets' ? 'active' : ''}`}
             onClick={() => onNavigate?.('assets')}
           >
             Meus Ativos
           </button>
         </nav>
-
         <div className="user-section">
           <button className="btn-login">Entrar</button>
         </div>

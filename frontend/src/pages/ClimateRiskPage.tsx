@@ -1,3 +1,4 @@
+// ...existing code...
 import * as shapefile from 'shapefile';
 import React, { useState, useEffect } from 'react';
 import { Line, Bar } from 'react-chartjs-2';
@@ -33,8 +34,8 @@ const ASSET_LIMIT_PROFILES: Record<AssetType, {
 };
 
 interface ClimateScenario {
-  historical_period: string;
-  future_period: string;
+  start_year: string;
+  end_year: string;
   ssp_scenario: 'SSP1-2.6' | 'SSP2-4.5' | 'SSP5-8.5';
 }
 type NamedLocationSource = 'campos_producao' | 'blocos_exploratorios';
@@ -239,10 +240,9 @@ const ClimateRiskPage = () => {
   const [assetValue, setAssetValue] = useState<number>(100000000);
   const [includePopulation, setIncludePopulation] = useState<boolean>(true);
   const [stateName, setStateName] = useState<string>('');
-  const [enableScenarios, setEnableScenarios] = useState<boolean>(true);
   const [scenario, setScenario] = useState<ClimateScenario>({
-    historical_period: '1985-2014',
-    future_period: '2035-2064',
+    start_year: '1985',
+    end_year: '2064',
     ssp_scenario: 'SSP5-8.5',
   });
   const [selectedHazards, setSelectedHazards] = useState<string[]>(['wind', 'wave']);
@@ -255,9 +255,11 @@ const ClimateRiskPage = () => {
     baciaCampos: true,
     blocosExploratorios: true,
     camposProducao: true,
+    boundingBox: true,
   });
   const [result, setResult] = useState<ClimateRiskResult | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
+  // Removed unused state variables: region, period, stat
 
   useEffect(() => {
     const profile = ASSET_LIMIT_PROFILES[assetType] ?? ASSET_LIMIT_PROFILES.platform;
@@ -359,22 +361,29 @@ const ClimateRiskPage = () => {
         wind_attention_max: Math.max(windAttentionMax, windOperationalMax),
         wave_operational_max: waveOperationalMax,
         wave_attention_max: Math.max(waveAttentionMax, waveOperationalMax),
-        enable_scenarios: enableScenarios,
-        scenario: enableScenarios ? scenario : undefined,
+        enable_scenarios: true,
+        scenario: {
+          historical_period: `${scenario.start_year}-2014`,
+          future_period: `2015-${scenario.end_year}`,
+          ssp_scenario: scenario.ssp_scenario,
+        },
+        include_population: includePopulation,
+        state_name: stateName || undefined,
       };
+      console.log('Payload enviado para análise:', payload);
       const data =
         analysisMode === 'offshore'
           ? await analysisService.runClimateRiskOffshore(payload)
-          : await analysisService.runClimateRiskOnshore({
-              ...payload,
-              include_population: includePopulation,
-              state_name: stateName || undefined,
-            });
+          : await analysisService.runClimateRiskOnshore(payload);
       setResult(data);
     } catch (error) {
       console.error('Erro:', error);
       const detail = error instanceof Error ? error.message : String(error);
-      alert(`Erro ao executar análise de risco climático.\n\nDetalhe: ${detail}`);
+      if (detail.includes('is not a valid coordinate for dataset') || detail.includes('Arquivo NetCDF não encontrado')) {
+        alert('O ponto selecionado está fora da área de cobertura dos dados climáticos. Selecione um ponto dentro da região suportada pelo NetCDF.');
+      } else {
+        alert(`Erro ao executar análise de risco climático.\n\nDetalhe: ${detail}`);
+      }
     } finally {
       setLoading(false);
     }
@@ -392,17 +401,19 @@ const ClimateRiskPage = () => {
         wind_attention_max: Math.max(windAttentionMax, windOperationalMax),
         wave_operational_max: waveOperationalMax,
         wave_attention_max: Math.max(waveAttentionMax, waveOperationalMax),
-        enable_scenarios: enableScenarios,
-        scenario: enableScenarios ? scenario : undefined,
+        enable_scenarios: true,
+        scenario: {
+          historical_period: `${scenario.start_year}-2014`,
+          future_period: `2015-${scenario.end_year}`,
+          ssp_scenario: scenario.ssp_scenario,
+        },
+        include_population: includePopulation,
+        state_name: stateName || undefined,
       };
       const blob =
         analysisMode === 'offshore'
           ? await analysisService.downloadClimateRiskOffshorePdf(payload)
-          : await analysisService.downloadClimateRiskOnshorePdf({
-              ...payload,
-              include_population: includePopulation,
-              state_name: stateName || undefined,
-            });
+          : await analysisService.downloadClimateRiskOnshorePdf(payload);
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -484,51 +495,44 @@ const ClimateRiskPage = () => {
               <p className="location-display">
                 Coordenadas: <strong>{lat.toFixed(4)}, {lon.toFixed(4)}</strong>
               </p>
-              {analysisMode === 'offshore' && (
-                <div className="form-card limits-panel">
-                  <h2>Limites Operacionais</h2>
-                  <div className="form-row">
-                    <div className="form-group">
-                      <label>Vento Operacional Máx (m/s)</label>
-                      <input
-                        type="number"
-                        value={windOperationalMax}
-                        onChange={(e) => setWindOperationalMax(Number(e.target.value))}
-                        step="0.1"
-                      />
-                    </div>
-                    <div className="form-group">
-                      <label>Vento Atenção Máx (m/s)</label>
-                      <input
-                        type="number"
-                        value={windAttentionMax}
-                        onChange={(e) => setWindAttentionMax(Number(e.target.value))}
-                        step="0.1"
-                      />
-                    </div>
-                  </div>
-                  <div className="form-row">
-                    <div className="form-group">
-                      <label>Onda Operacional Máx (m)</label>
-                      <input
-                        type="number"
-                        value={waveOperationalMax}
-                        onChange={(e) => setWaveOperationalMax(Number(e.target.value))}
-                        step="0.1"
-                      />
-                    </div>
-                    <div className="form-group">
-                      <label>Onda Atenção Máx (m)</label>
-                      <input
-                        type="number"
-                        value={waveAttentionMax}
-                        onChange={(e) => setWaveAttentionMax(Number(e.target.value))}
-                        step="0.1"
-                      />
-                    </div>
-                  </div>
+            </div>
+            <div className="form-card period-scenario-panel">
+              <h2>Período e Cenário Climático</h2>
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Ano inicial (histórico)</label>
+                  <input
+                    type="number"
+                    min="1979"
+                    max="2015"
+                    value={scenario.start_year}
+                    onChange={(e) => setScenario({ ...scenario, start_year: e.target.value })}
+                  />
                 </div>
-              )}
+                <div className="form-group">
+                  <label>Ano final (preditivo)</label>
+                  <input
+                    type="number"
+                    min="2015"
+                    max="2064"
+                    value={scenario.end_year}
+                    onChange={(e) => setScenario({ ...scenario, end_year: e.target.value })}
+                  />
+                </div>
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Cenário Climático</label>
+                  <select
+                    value={scenario.ssp_scenario}
+                    onChange={(e) => setScenario({ ...scenario, ssp_scenario: e.target.value as ClimateScenario['ssp_scenario'] })}
+                  >
+                    <option value="SSP1-2.6">SSP1-2.6</option>
+                    <option value="SSP2-4.5">SSP2-4.5</option>
+                    <option value="SSP5-8.5">SSP5-8.5</option>
+                  </select>
+                </div>
+              </div>
             </div>
           </div>
           <div className="right-map-panel">
@@ -625,6 +629,18 @@ const ClimateRiskPage = () => {
                         type="checkbox"
                         checked={climateRiskMapLayers.camposProducao}
                         onChange={(e) => setClimateRiskMapLayers((prev) => ({ ...prev, camposProducao: e.target.checked }))}
+                      />
+                      <span className="climate-layer-slider" />
+                    </span>
+                  </label>
+                  <label className="climate-layer-item">
+                    <span>Bounding Box Dados</span>
+                    <span className="climate-layer-switch">
+                      <input
+                        className="climate-layer-checkbox"
+                        type="checkbox"
+                        checked={climateRiskMapLayers.boundingBox}
+                        onChange={(e) => setClimateRiskMapLayers((prev) => ({ ...prev, boundingBox: e.target.checked }))}
                       />
                       <span className="climate-layer-slider" />
                     </span>
@@ -792,24 +808,28 @@ const ClimateRiskPage = () => {
                     <h3>Métricas de Risco</h3>
                     <div className="metric">
                       <span className="value">
-                        {(result.aal || 0).toLocaleString('pt-BR', {
-                          style: 'currency',
-                          currency: 'BRL',
-                        })}
+                        {result && typeof result.aal === 'number'
+                          ? result.aal.toLocaleString('pt-BR', {
+                              style: 'currency',
+                              currency: 'BRL',
+                            })
+                          : 'N/A'}
                       </span>
                       <span className="label">AAL (Perda Anual Esperada)</span>
                     </div>
                     <div className="metric">
                       <span className="value">
-                        {(result.pml || 0).toLocaleString('pt-BR', {
-                          style: 'currency',
-                          currency: 'BRL',
-                        })}
+                        {result && typeof result.pml === 'number'
+                          ? result.pml.toLocaleString('pt-BR', {
+                              style: 'currency',
+                              currency: 'BRL',
+                            })
+                          : 'N/A'}
                       </span>
                       <span className="label">PML (Perda Máxima Provável)</span>
                     </div>
                   </div>
-                  {enableScenarios && result.scenario_comparison && (
+                  {result && result.scenario_comparison && typeof result.scenario_comparison.change_percent === 'number' && scenario && scenario.ssp_scenario ? (
                     <div className="result-card">
                       <h3>Comparação de Cenários</h3>
                       <div className="metric">
@@ -817,7 +837,7 @@ const ClimateRiskPage = () => {
                         <span className="label">Mudança Projetada ({scenario.ssp_scenario})</span>
                       </div>
                     </div>
-                  )}
+                  ) : null}
                 </div>
               ) : (
                 <div className="results-grid">
@@ -827,13 +847,17 @@ const ClimateRiskPage = () => {
                       <>
                         <div className="metric">
                           <span className="value">
-                            {(result.total_population || 0).toLocaleString('pt-BR')}
+                            {result && typeof result.total_population === 'number'
+                              ? result.total_population.toLocaleString('pt-BR')
+                              : 'N/A'}
                           </span>
                           <span className="label">População Total</span>
                         </div>
                         <div className="metric">
                           <span className="value">
-                            {(result.affected_population || 0).toLocaleString('pt-BR')}
+                            {result && typeof result.affected_population === 'number'
+                              ? result.affected_population.toLocaleString('pt-BR')
+                              : 'N/A'}
                           </span>
                           <span className="label">População em Risco</span>
                         </div>
@@ -844,10 +868,11 @@ const ClimateRiskPage = () => {
                     <h3>Impacto Econômico</h3>
                     <div className="metric">
                       <span className="value">
-                        {(result.aal || 0).toLocaleString('pt-BR', {
-                          style: 'currency',
-                          currency: 'BRL',
-                        })}
+                        {result && typeof result.aal === 'number'
+                          ? result.aal.toLocaleString('pt-BR', {
+                              style: 'currency',
+                              currency: 'BRL',
+                        }): 'N/A'}
                       </span>
                       <span className="label">AAL</span>
                     </div>

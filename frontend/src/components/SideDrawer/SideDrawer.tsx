@@ -76,8 +76,9 @@ export const SideDrawer: React.FC<SideDrawerProps> = ({
 }) => {
   const [riskType, setRiskType] = useState('wind');
   const [region, setRegion] = useState('geral');
-  const [startDate, setStartDate] = useState('2024-01-01');
-  const [endDate, setEndDate] = useState('2024-12-31');
+  // Período permitido: 1979-01-01 a 2060-12-31
+  const [startDate, setStartDate] = useState('1979-01-01');
+  const [endDate, setEndDate] = useState('2060-12-31');
 
   // Spatial bounds
   const [latMin, setLatMin] = useState(-30.271);
@@ -99,7 +100,8 @@ export const SideDrawer: React.FC<SideDrawerProps> = ({
     baciaSantos: false,
     baciaCampos: false,
     blocosExploratorios: false,
-    camposProducao: false
+    camposProducao: false,
+    netcdfBbox: false,
   });
 
   // Update bounds when region changes
@@ -192,11 +194,23 @@ export const SideDrawer: React.FC<SideDrawerProps> = ({
             <h3>Período de Análise</h3>
             <div className="input-group">
               <label>Data Inicial</label>
-              <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+              <input
+                type="date"
+                value={startDate}
+                min="1979-01-01"
+                max="2060-12-31"
+                onChange={(e) => setStartDate(e.target.value)}
+              />
             </div>
             <div className="input-group">
               <label>Data Final</label>
-              <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+              <input
+                type="date"
+                value={endDate}
+                min="1979-01-01"
+                max="2060-12-31"
+                onChange={(e) => setEndDate(e.target.value)}
+              />
             </div>
           </section>
 
@@ -269,6 +283,14 @@ export const SideDrawer: React.FC<SideDrawerProps> = ({
                   onChange={(e) => setLayers({ ...layers, camposProducao: e.target.checked })}
                 />
                 <span>Campos de Produção</span>
+              </label>
+              <label className="layer-item">
+                <input
+                  type="checkbox"
+                  checked={layers.netcdfBbox}
+                  onChange={(e) => setLayers({ ...layers, netcdfBbox: e.target.checked })}
+                />
+                <span>Cobertura NetCDF</span>
               </label>
             </div>
           </section>

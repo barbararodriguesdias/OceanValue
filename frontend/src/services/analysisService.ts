@@ -239,8 +239,8 @@ export interface WindScenarioComparisonRequest {
   lon: number;
   scenario?: 'ssp585';
   stat?: 'mean' | 'max';
-  historical_period?: string;
-  future_period?: string;
+  start_year?: string;
+  end_year?: string;
   operational_max_knots?: number;
   attention_max_knots?: number;
 }
@@ -253,8 +253,8 @@ export interface WindScenarioComparisonResult {
     stat: string;
     lat: number;
     lon: number;
-    historical_period: string;
-    future_period: string;
+    start_year: string;
+    end_year: string;
     operational_max_knots: number;
     attention_max_knots: number;
   };
@@ -299,8 +299,8 @@ export interface WaveScenarioComparisonRequest {
   lon: number;
   scenario?: 'ssp585';
   stat?: 'mean' | 'max';
-  historical_period?: string;
-  future_period?: string;
+  start_year?: string;
+  end_year?: string;
   operational_max_meters?: number;
   attention_max_meters?: number;
 }
@@ -402,28 +402,34 @@ export interface MaritimeDowntimeResult {
 }
 
 export interface ClimateScenario {
+  start_year: string;
+  end_year: string;
+  ssp_scenario: 'SSP1-2.6' | 'SSP2-4.5' | 'SSP5-8.5';
+}
+
+export interface ClimateScenarioPayload {
   historical_period: string;
   future_period: string;
   ssp_scenario: 'SSP1-2.6' | 'SSP2-4.5' | 'SSP5-8.5';
 }
 
-export interface ClimateRiskOffshoreRequest {
+export interface ClimateRiskRequest {
   lat: number;
   lon: number;
   asset_type: string;
   asset_value: number;
   hazards: string[];
-  wind_operational_max?: number;
-  wind_attention_max?: number;
-  wave_operational_max?: number;
-  wave_attention_max?: number;
-  enable_scenarios?: boolean;
-  scenario?: ClimateScenario;
-}
-
-export interface ClimateRiskOnshoreRequest extends ClimateRiskOffshoreRequest {
-  include_population?: boolean;
+  wind_operational_max: number;
+  wind_attention_max: number;
+  wave_operational_max: number;
+  wave_attention_max: number;
+  enable_scenarios: boolean;
+  scenario: ClimateScenarioPayload;
+  include_population: boolean;
   state_name?: string;
+  region?: string;
+  period?: string;
+  stat?: string;
 }
 
 export interface ClimateRiskResult {
@@ -553,8 +559,8 @@ export const analysisService = {
       lon: String(request.lon),
       scenario: request.scenario ?? 'ssp585',
       stat: request.stat ?? 'mean',
-      historical_period: request.historical_period ?? '1985-2014',
-      future_period: request.future_period ?? '2035-2064',
+      start_year: String(request.start_year ?? 1985),
+      end_year: String(request.end_year ?? 2064),
       operational_max_knots: String(request.operational_max_knots ?? 15),
       attention_max_knots: String(request.attention_max_knots ?? 20),
     });
@@ -605,7 +611,7 @@ export const analysisService = {
 
     return response.json();
   },
-  async runClimateRiskOffshore(request: ClimateRiskOffshoreRequest): Promise<ClimateRiskResult> {
+  async runClimateRiskOffshore(request: ClimateRiskRequest): Promise<ClimateRiskResult> {
     const response = await fetch(`${API_BASE}/api/v1/analysis/climate-risk-offshore`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...TUNNEL_BYPASS_HEADERS },
@@ -619,7 +625,7 @@ export const analysisService = {
 
     return response.json();
   },
-  async downloadClimateRiskOffshorePdf(request: ClimateRiskOffshoreRequest): Promise<Blob> {
+  async downloadClimateRiskOffshorePdf(request: ClimateRiskRequest): Promise<Blob> {
     const response = await fetch(`${API_BASE}/api/v1/analysis/climate-risk-offshore-pdf`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...TUNNEL_BYPASS_HEADERS },
@@ -633,7 +639,7 @@ export const analysisService = {
 
     return response.blob();
   },
-  async runClimateRiskOnshore(request: ClimateRiskOnshoreRequest): Promise<ClimateRiskResult> {
+  async runClimateRiskOnshore(request: ClimateRiskRequest): Promise<ClimateRiskResult> {
     const response = await fetch(`${API_BASE}/api/v1/analysis/climate-risk-onshore`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...TUNNEL_BYPASS_HEADERS },
@@ -647,7 +653,7 @@ export const analysisService = {
 
     return response.json();
   },
-  async downloadClimateRiskOnshorePdf(request: ClimateRiskOnshoreRequest): Promise<Blob> {
+  async downloadClimateRiskOnshorePdf(request: ClimateRiskRequest): Promise<Blob> {
     const response = await fetch(`${API_BASE}/api/v1/analysis/climate-risk-onshore-pdf`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...TUNNEL_BYPASS_HEADERS },

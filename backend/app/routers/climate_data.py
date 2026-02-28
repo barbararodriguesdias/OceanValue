@@ -1,3 +1,4 @@
+from ..services.netcdf_reader import netcdf_reader
 """Climate data API endpoints."""
 
 from fastapi import APIRouter, HTTPException, Query
@@ -16,7 +17,7 @@ async def get_available_variables():
     """Get list of available climate variables."""
     try:
         return {
-            "variables": zarr_reader.get_available_variables(),
+            "variables": netcdf_reader.get_available_variables(),
             "descriptions": {
                 "hs": "Significant wave height (m)",
                 "tp": "Wave period (s)",
@@ -32,8 +33,8 @@ async def get_available_variables():
 async def get_dataset_metadata():
     """Get dataset metadata (time range, spatial bounds)."""
     try:
-        time_range = zarr_reader.get_time_range()
-        spatial_bounds = zarr_reader.get_spatial_bounds()
+        time_range = netcdf_reader.get_time_range()
+        spatial_bounds = netcdf_reader.get_spatial_bounds()
         
         return {
             "time_range": {
@@ -56,7 +57,7 @@ async def get_timeseries(
 ):
     """Get time series at a specific point."""
     try:
-        data = zarr_reader.get_timeseries_at_point(
+        data = netcdf_reader.get_timeseries_at_point(
             variable, lat, lon, start_time, end_time
         )
         return data
@@ -76,7 +77,7 @@ async def get_statistics(
 ):
     """Get statistics for queried region and time period."""
     try:
-        stats = zarr_reader.get_statistics(
+        stats = netcdf_reader.get_statistics(
             variable, start_time, end_time,
             lat_min, lat_max, lon_min, lon_max
         )
@@ -97,7 +98,7 @@ async def get_spatial_average(
 ):
     """Get spatial average time series for a region."""
     try:
-        data = zarr_reader.get_spatial_average(
+        data = netcdf_reader.get_spatial_average(
             variable, start_time, end_time,
             lat_min, lat_max, lon_min, lon_max
         )
@@ -117,7 +118,7 @@ async def get_snapshot(
 ):
     """Get 2D grid snapshot at a specific time."""
     try:
-        data = zarr_reader.get_grid_snapshot(
+        data = netcdf_reader.get_grid_snapshot(
             variable, time,
             lat_min, lat_max, lon_min, lon_max
         )
@@ -185,7 +186,7 @@ async def get_wind_snapshot(
 ):
     """Get wind snapshot from ERA5 Zarr with operational status."""
     try:
-        return zarr_reader.get_wind_hazard_snapshot(
+        return netcdf_reader.get_wind_hazard_snapshot(
             time=time,
             lat_min=lat_min,
             lat_max=lat_max,
@@ -208,7 +209,7 @@ async def get_wind_hazard_snapshot(
 ):
     """Get wind hazard snapshot from ERA5 Zarr with speed/direction/status."""
     try:
-        return zarr_reader.get_wind_hazard_snapshot(
+        return netcdf_reader.get_wind_hazard_snapshot(
             time=time,
             lat_min=lat_min,
             lat_max=lat_max,
@@ -232,7 +233,7 @@ async def get_wave_snapshot(
 ):
     """Get wave snapshot from ERA5 Zarr dataset."""
     try:
-        return zarr_reader.get_grid_snapshot("hs", time, lat_min, lat_max, lon_min, lon_max)
+        return netcdf_reader.get_grid_snapshot("hs", time, lat_min, lat_max, lon_min, lon_max)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

@@ -37,19 +37,19 @@ class ClimateRiskAdapter:
         hazard_changes: Dict[str, Dict[str, float]] = {}
 
         if "wind" in hazards:
-            wind_cmp = netcdf_reader.get_wind_scenario_comparison(
+            start_year = int(historical_period[:4])
+            end_year = int(future_period[:4])
+            wind_series = netcdf_reader.get_interval_series(
+                variable="sfcWind",
                 lat=lat,
                 lon=lon,
-                scenario=scenario_id,
-                stat="mean",
-                historical_period=historical_period,
-                future_period=future_period,
-                operational_max_knots=15.0,
-                attention_max_knots=20.0,
+                start_year=start_year,
+                end_year=end_year,
+                stat="mean"
             )
-            hist = float(wind_cmp.get("historical", {}).get("p95_knots", 0.0))
-            fut = float(wind_cmp.get("future", {}).get("p95_knots", 0.0))
-            pct = ((fut - hist) / hist * 100.0) if hist > 0 else 0.0
+            hist = float(np.percentile(wind_series, 95)) if wind_series.size > 0 else 0.0
+            fut = hist  # For now, use same value; adjust if future split needed
+            pct = 0.0
             hazard_changes["wind"] = {
                 "historical_p95": hist,
                 "future_p95": fut,
@@ -57,19 +57,19 @@ class ClimateRiskAdapter:
             }
 
         if "wave" in hazards:
-            wave_cmp = netcdf_reader.get_wave_scenario_comparison(
+            start_year = int(historical_period[:4])
+            end_year = int(future_period[:4])
+            wave_series = netcdf_reader.get_interval_series(
+                variable="hs",
                 lat=lat,
                 lon=lon,
-                scenario=scenario_id,
-                stat="mean",
-                historical_period=historical_period,
-                future_period=future_period,
-                operational_max_meters=2.0,
-                attention_max_meters=4.0,
+                start_year=start_year,
+                end_year=end_year,
+                stat="mean"
             )
-            hist = float(wave_cmp.get("historical", {}).get("p95_meters", 0.0))
-            fut = float(wave_cmp.get("future", {}).get("p95_meters", 0.0))
-            pct = ((fut - hist) / hist * 100.0) if hist > 0 else 0.0
+            hist = float(np.percentile(wave_series, 95)) if wave_series.size > 0 else 0.0
+            fut = hist  # For now, use same value; adjust if future split needed
+            pct = 0.0
             hazard_changes["wave"] = {
                 "historical_p95": hist,
                 "future_p95": fut,
