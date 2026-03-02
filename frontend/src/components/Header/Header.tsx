@@ -10,7 +10,11 @@ const Header: React.FC<HeaderProps> = ({ activePage, onNavigate }) => {
   return (
     <header className="header">
       <div className="header-content">
+<<<<<<< HEAD
         <div className="logo-section" onClick={() => onNavigate?.('climate-risk')} style={{ cursor: 'pointer' }}>
+=======
+        <div className="logo-section">
+>>>>>>> da2cbac (mudanças no frontnd)
           <img src="/oceanpact-logo.png" alt="OceanPact Logo" className="logo-image" style={{ marginRight: '18px', height: '40px' }} />
           <div className="logo-text">
             <h1 className="logo">OceanValue</h1>

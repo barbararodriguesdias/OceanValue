@@ -22,10 +22,13 @@
   transition: opacity 0.2s ease;
 }
 
+<<<<<<< HEAD
 .logo-section:hover {
   opacity: 0.85;
 }
 
+=======
+>>>>>>> da2cbac (mudanças no frontnd)
 .logo-image {
   height: 50px;
   width: auto;
@@ -87,6 +90,7 @@
   gap: 1rem;
   align-items: center;
   flex-shrink: 0;
+  margin-left: auto;
 }
 
  .btn-login {
