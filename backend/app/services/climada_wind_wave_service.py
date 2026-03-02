@@ -15,7 +15,11 @@ from climada.hazard.centroids import Centroids
 
 from .climada_petals import climada_petals_engine
 from .netcdf_reader import netcdf_reader
+<<<<<<< HEAD
 from .zarr_reader import zarr_reader
+=======
+from .oceanpact_data_reader import get_netcdf_series, find_netcdf_file
+>>>>>>> 679b437a955223e69a5f4efba330a4210e250337
 
 
 @dataclass
@@ -147,6 +151,7 @@ class ClimadaWindWaveService:
         return self._ASSET_PROFILES.get(key, self._ASSET_PROFILES["platform"])
 
     @staticmethod
+<<<<<<< HEAD
     def _exceedance_probs(n: int, method: str = "weibull") -> np.ndarray:
         if n <= 0:
             return np.array([], dtype=float)
@@ -207,6 +212,26 @@ class ClimadaWindWaveService:
         asset_value: float,
         haz_code: str,
     ) -> Exposures:
+=======
+    @staticmethod
+    def _exceedance_probs(n: int, method: str = "weibull") -> np.ndarray:
+        if n <= 0:
+            return np.array([], dtype=float)
+        rank = np.arange(1, n + 1, dtype=float)
+        m = (method or "weibull").lower()
+        if m == "weibull":
+            return rank / (n + 1)
+        elif m == "gringorten":
+            return (rank - 0.44) / (n + 0.12)
+        elif m == "cunnane":
+            return (rank - 0.4) / (n + 0.2)
+        else:
+            return rank / (n + 1)
+
+        # ...existing code for response (sanitized block remains)...
+    @staticmethod
+    def _build_exposures(lat: float, lon: float, asset_value: float, haz_code: str) -> Exposures:
+>>>>>>> 679b437a955223e69a5f4efba330a4210e250337
         impf_column = f"impf_{haz_code}"
         frame = pd.DataFrame(
             {
@@ -308,10 +333,14 @@ class ClimadaWindWaveService:
             "pml": float(np.nanmax(clean_events)),
             "var": float(var_q),
             "tvar": float(tvar_q),
+<<<<<<< HEAD
             "risk_load": float(pricing.get("risk_load", 0.0)),
             "pure_premium": float(pricing.get("pure_premium", 0.0)),
             "technical_premium": float(pricing.get("technical_premium", 0.0)),
             "petals_appendix": pricing.get("petals_appendix", {}),
+=======
+            # ...removed duplicate/old pricing_models block...
+>>>>>>> 679b437a955223e69a5f4efba330a4210e250337
         }
 
     def _compute_single_hazard(
@@ -338,6 +367,7 @@ class ClimadaWindWaveService:
         if clean.size == 0:
             clean = np.array([0.0], dtype=float)
 
+<<<<<<< HEAD
         hazard = self._build_hazard(
             haz_code=cfg.code,
             unit=cfg.unit,
@@ -346,6 +376,17 @@ class ClimadaWindWaveService:
             intensity_values=clean,
             annualization=annualization,
         )
+=======
+        # Build hazard object using CLIMADA's Hazard class (example for wind/wave)
+        from climada.hazard import Hazard, Centroids
+        from scipy.sparse import csr_matrix
+        hazard = Hazard()
+        hazard.haz_type = cfg.code
+        hazard.intensity = csr_matrix(clean.reshape(1, -1))
+        hazard.frequency = np.ones(clean.shape, dtype=float) * float(annualization)
+        hazard.units = cfg.unit
+        hazard.centroids = Centroids.from_lat_lon([float(lat)], [float(lon)])
+>>>>>>> 679b437a955223e69a5f4efba330a4210e250337
         exposures = self._build_exposures(lat=lat, lon=lon, asset_value=asset_value, haz_code=cfg.code)
         impf_set = self._build_impact_func_set(
             haz_code=cfg.code,
@@ -360,7 +401,11 @@ class ClimadaWindWaveService:
         pricing_summary = self._impact_summary(
             impact,
             risk_quantile=risk_quantile,
+<<<<<<< HEAD
             annualization=annualization,
+=======
+            annualization=float(annualization),
+>>>>>>> 679b437a955223e69a5f4efba330a4210e250337
             risk_load_method=risk_load_method,
             expense_ratio=expense_ratio,
         )
@@ -793,6 +838,12 @@ class ClimadaWindWaveService:
         risk_quantile: float,
         risk_load_method: str,
         expense_ratio: float,
+<<<<<<< HEAD
+=======
+        region: str = "campos",
+        period: str = "historico",
+        stat: str = "max",
+>>>>>>> 679b437a955223e69a5f4efba330a4210e250337
     ) -> Dict:
         selected_hazards = [h for h in hazards if h in self._CONFIG]
         if not selected_hazards:
@@ -800,12 +851,34 @@ class ClimadaWindWaveService:
 
         profile = self.get_asset_profile(asset_type)
 
+<<<<<<< HEAD
         series_map: Dict[str, xr.DataArray] = {}
         if "wind" in selected_hazards:
             series_map["wind"] = zarr_reader.get_wind_speed_series(lat, lon, start_time, end_time)
         if "wave" in selected_hazards:
             series_map["wave"] = zarr_reader.get_point_series("hs", lat, lon, start_time, end_time)
 
+=======
+        hazard_map = {"wind": "vento", "wave": "onda"}
+
+        series_map = {}
+        for hazard in selected_hazards:
+            hazard_key = hazard_map.get(hazard, hazard)
+            series = self.get_oceanpact_series(
+                hazard=hazard_key,
+                region=region,
+                period=period,
+                lat=lat,
+                lon=lon,
+            )
+            if series is not None:
+                series_map[hazard] = series
+
+        if not series_map:
+            raise ValueError("Nenhuma série temporal NetCDF encontrada para os parâmetros informados.")
+
+        # Alinhar as séries temporais (usando xarray)
+>>>>>>> 679b437a955223e69a5f4efba330a4210e250337
         aligned = xr.align(*series_map.values(), join="inner")
         aligned_map = dict(zip(series_map.keys(), aligned))
 
@@ -879,7 +952,27 @@ class ClimadaWindWaveService:
         exceedance = self._exceedance_probs(sorted_losses.size, exceedance_method)
 
         hazard_labels = list(hazard_out.keys())
+<<<<<<< HEAD
         hazard_aal_values = [self._safe_float(hazard_out[h]["pricing"].get("aal", 0.0)) for h in hazard_labels]
+=======
+        hazard_aal_values = [float(hazard_out[h]["pricing"].get("aal", 0.0)) for h in hazard_labels]
+
+        def _safe_float_or_dict(val):
+            if isinstance(val, dict):
+                # Recursively sanitize dict values
+                return {k: _safe_float_or_dict(v) for k, v in val.items()}
+            try:
+                return float(val)
+            except Exception:
+                return 0.0
+
+        pricing = combined_impact["pricing"]
+        petals_appendix = pricing.get("petals_appendix", {})
+        if not isinstance(petals_appendix, dict):
+            petals_appendix = {}
+        else:
+            petals_appendix = _safe_float_or_dict(petals_appendix)
+>>>>>>> 679b437a955223e69a5f4efba330a4210e250337
 
         response = {
             "time": aligned[0].time.values.astype(str).tolist() if aligned else [],
@@ -895,7 +988,15 @@ class ClimadaWindWaveService:
             "hazard_breakdown": hazard_out,
             "combined": combined,
             "pricing_models": {
+<<<<<<< HEAD
                 **combined_impact["pricing"],
+=======
+                "aal": _safe_float_or_dict(pricing.get("aal", 0.0)),
+                "risk_load": _safe_float_or_dict(pricing.get("risk_load", 0.0)),
+                "pure_premium": _safe_float_or_dict(pricing.get("pure_premium", 0.0)),
+                "technical_premium": _safe_float_or_dict(pricing.get("technical_premium", 0.0)),
+                "petals_appendix": petals_appendix,
+>>>>>>> 679b437a955223e69a5f4efba330a4210e250337
                 "annualization_factor": annualization,
                 "asset_value": float(max(asset_value, 0.0)),
                 "asset_profile": str(asset_type or "platform").lower(),
@@ -943,6 +1044,7 @@ class ClimadaWindWaveService:
             },
         }
 
+<<<<<<< HEAD
         if "wind" in aligned_map:
             direction = zarr_reader.get_wind_direction_series(lat, lon, start_time, end_time)
             direction_values = np.asarray(direction.values, dtype=float)
@@ -956,5 +1058,49 @@ class ClimadaWindWaveService:
         response["exposure_reference"] = zarr_reader._build_exposure_reference(lat=lat, lon=lon)
         return response
 
+=======
+        return response
+
+    def get_oceanpact_series(self, hazard: str, region: str, period: str, lat: float, lon: float):
+        """
+        Busca e retorna série temporal do dado OceanPact NetCDF conforme seleção do usuário.
+        hazard: 'onda' ou 'vento'
+        region: 'campos', 'santos', etc
+        period: 'historico', 'preditivo_2015_2030', etc
+        """
+        base_dir = "D:/OceanPact/Netcdf"
+        file = find_netcdf_file(base_dir, hazard, period)
+        if file:
+            import xarray as xr
+            ds = xr.open_dataset(file)
+            if hazard == 'vento':
+                # Procura possíveis nomes de variável de vento
+                wind_vars = [
+                    'wind', 'sfcwindmax_corr', 'sfc_wind_max', 'sfcwindmax',
+                    'sfcWind', 'sfcWindmax', 'sfcWindmax_hist_processado', 'sfcWind_hist_processado'
+                ]
+                for var in wind_vars:
+                    if var in ds.variables:
+                        variable = var
+                        break
+                else:
+                    raise ValueError(f"Nenhuma variável de vento encontrada no arquivo NetCDF. Variáveis disponíveis: {list(ds.variables.keys())}")
+            else:
+                # Para onda, cobre hs, hsmax, hsmean, etc
+                wave_vars = ['hs', 'hsmax', 'hsmean', 'hsmax_ww3_mri_1979_2015', 'hsmean_ww3_mri_1979_2015']
+                for var in wave_vars:
+                    if var in ds.variables:
+                        variable = var
+                        break
+                else:
+                    raise ValueError(f"Nenhuma variável de onda encontrada no arquivo NetCDF. Variáveis disponíveis: {list(ds.variables.keys())}")
+            ds.close()
+            series = get_netcdf_series(file, variable, lat, lon)
+            # Verifica se a série temporal está vazia
+            if hasattr(series, 'size') and series.size == 0:
+                raise ValueError(f"A série temporal extraída da variável '{variable}' está vazia para o ponto ({lat}, {lon}). Verifique se há dados válidos no NetCDF.")
+            return series
+        return None
+>>>>>>> 679b437a955223e69a5f4efba330a4210e250337
 
 climada_wind_wave_service = ClimadaWindWaveService()

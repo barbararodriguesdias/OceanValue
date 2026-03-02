@@ -1,0 +1,21 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-55, -27],
+          [-55, 0],
+          [-25, 0],
+          [-25, -27],
+          [-55, -27]
+        ]]
+      },
+      "properties": {
+        "name": "Bounding Box Dados NetCDF"
+      }
+    }
+  ]
+}

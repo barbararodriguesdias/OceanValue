@@ -3,12 +3,19 @@
 
 import React from 'react';
 import './styles/App.css';
+<<<<<<< HEAD
 import Map from './components/Map/Map';
 import TimelineControl from './components/Timeline/TimelineControl';
+=======
+// import Map from './components/Map/Map';
+// import SideDrawer, { VisualizationConfig } from './components/SideDrawer/SideDrawer';
+// import TimelineControl from './components/Timeline/TimelineControl';
+>>>>>>> 679b437a955223e69a5f4efba330a4210e250337
 import Header from './components/Header/Header';
 import MyAssetsPage, { SavedAsset } from './pages/MyAssetsPage';
 import MaritimeDowntimePage from './pages/MaritimeDowntimePage';
 import ClimateRiskPage from './pages/ClimateRiskPage';
+<<<<<<< HEAD
 
 interface VisualizationConfig {
   riskType: 'wind' | 'wave';
@@ -29,13 +36,19 @@ interface VisualizationConfig {
   lonMin?: number;
   lonMax?: number;
 }
+=======
+>>>>>>> 679b437a955223e69a5f4efba330a4210e250337
 
 const ASSETS_STORAGE_KEY = 'oceanvalue_saved_assets_v1';
 
 function App() {
+<<<<<<< HEAD
   const [currentConfig, setCurrentConfig] = React.useState<VisualizationConfig | null>(null);
   const [snapshotTime, setSnapshotTime] = React.useState<string | undefined>(undefined);
   const [activePage, setActivePage] = React.useState<'map' | 'analysis' | 'assets' | 'maritime-downtime' | 'climate-risk'>('map');
+=======
+  const [activePage, setActivePage] = React.useState<'climate-risk' | 'maritime-downtime' | 'assets'>('climate-risk');
+>>>>>>> 679b437a955223e69a5f4efba330a4210e250337
   const [savedAssets, setSavedAssets] = React.useState<SavedAsset[]>([]);
 
   React.useEffect(() => {
@@ -57,6 +70,7 @@ function App() {
 
   return (
     <div className="App">
+<<<<<<< HEAD
       <Header
         activePage={activePage}
         onNavigate={setActivePage}
@@ -101,6 +115,13 @@ function App() {
         ) : activePage === 'climate-risk' ? (
           <ClimateRiskPage />
         ) : (
+=======
+      <Header activePage={activePage} onNavigate={setActivePage} />
+      <div className="main-container content-scroll-mode">
+        {activePage === 'climate-risk' && <ClimateRiskPage />}
+        {activePage === 'maritime-downtime' && <MaritimeDowntimePage />}
+        {activePage === 'assets' && (
+>>>>>>> 679b437a955223e69a5f4efba330a4210e250337
           <MyAssetsPage
             assets={savedAssets}
             onRemoveAsset={(id) => setSavedAssets((prev) => prev.filter((item) => item.id !== id))}

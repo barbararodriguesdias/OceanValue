@@ -41,11 +41,12 @@ class ZarrDataReader:
     
     def get_spatial_bounds(self) -> Dict[str, float]:
         """Get spatial bounding box."""
+        lat_name, lon_name = self._get_lat_lon_names()
         return {
-            "north": float(self.ds.lat.max().values),
-            "south": float(self.ds.lat.min().values),
-            "west": float(self.ds.lon.min().values),
-            "east": float(self.ds.lon.max().values),
+            "north": float(self.ds[lat_name].max().values),
+            "south": float(self.ds[lat_name].min().values),
+            "west": float(self.ds[lon_name].min().values),
+            "east": float(self.ds[lon_name].max().values),
         }
     
     def query_data(
@@ -67,15 +68,33 @@ class ZarrDataReader:
         if start_time or end_time:
             data = data.sel(time=slice(start_time, end_time))
         
-        # Apply spatial slice
+        # Apply spatial slice using detected coordinate names
+        lat_name, lon_name = self._get_lat_lon_names()
         if lat_min is not None or lat_max is not None:
-            data = data.sel(lat=slice(lat_max, lat_min))  # Note: lat is descending
+            data = data.sel(**{lat_name: slice(lat_max, lat_min)})  # Note: lat may be descending
         
         if lon_min is not None or lon_max is not None:
-            data = data.sel(lon=slice(lon_min, lon_max))
+            data = data.sel(**{lon_name: slice(lon_min, lon_max)})
         
         return data
     
+    def _get_lat_lon_names(self) -> tuple[str, str]:
+        ds = self.ds
+        # Detect from dataset dims
+        lat_candidates = ['lat', 'latitude']
+        lon_candidates = ['lon', 'longitude']
+        lat_name = next((name for name in lat_candidates if name in ds.dims), None)
+        lon_name = next((name for name in lon_candidates if name in ds.dims), None)
+        # If not found, try from variable dims
+        if not lat_name or not lon_name:
+            for var in ds.data_vars:
+                dims = ds[var].dims
+                lat_name = next((name for name in lat_candidates if name in dims), lat_name)
+                lon_name = next((name for name in lon_candidates if name in dims), lon_name)
+        if not lat_name or not lon_name:
+            raise ValueError(f"Could not find latitude/longitude dimensions in dataset or variables. Found: {list(ds.dims.keys())}")
+        return lat_name, lon_name
+
     def get_timeseries_at_point(
         self,
         variable: str,
@@ -85,26 +104,22 @@ class ZarrDataReader:
         end_time: Optional[str] = None,
     ) -> Dict:
         """Get time series for a specific point."""
-        
+        lat_name, lon_name = self._get_lat_lon_names()
         # Select nearest point
         data = self.ds[variable].sel(
-            lat=lat,
-            lon=lon,
+            **{lat_name: lat, lon_name: lon},
             method="nearest"
         )
-        
         # Apply time slice
         if start_time or end_time:
             data = data.sel(time=slice(start_time, end_time))
-        
         # Load data and convert to dict
         data_loaded = data.load()
-        
         return {
             "time": data_loaded.time.values.astype(str).tolist(),
             "values": data_loaded.values.tolist(),
-            "lat": float(data_loaded.lat.values),
-            "lon": float(data_loaded.lon.values),
+            "lat": float(data_loaded[lat_name].values),
+            "lon": float(data_loaded[lon_name].values),
         }
 
     def get_point_series(
@@ -116,7 +131,8 @@ class ZarrDataReader:
         end_time: Optional[str] = None,
     ) -> xr.DataArray:
         """Get a point time series as DataArray."""
-        data = self.ds[variable].sel(lat=lat, lon=lon, method="nearest")
+        lat_name, lon_name = self._get_lat_lon_names()
+        data = self.ds[variable].sel(**{lat_name: lat, lon_name: lon}, method="nearest")
         if start_time or end_time:
             data = data.sel(time=slice(start_time, end_time))
         return data.load()
@@ -129,8 +145,9 @@ class ZarrDataReader:
         end_time: Optional[str] = None,
     ) -> xr.DataArray:
         """Get wind speed (knots) time series for a point."""
-        u10 = self.ds["u10"].sel(lat=lat, lon=lon, method="nearest")
-        v10 = self.ds["v10"].sel(lat=lat, lon=lon, method="nearest")
+        lat_name, lon_name = self._get_lat_lon_names()
+        u10 = self.ds["u10"].sel(**{lat_name: lat, lon_name: lon}, method="nearest")
+        v10 = self.ds["v10"].sel(**{lat_name: lat, lon_name: lon}, method="nearest")
         if start_time or end_time:
             u10 = u10.sel(time=slice(start_time, end_time))
             v10 = v10.sel(time=slice(start_time, end_time))
@@ -146,8 +163,9 @@ class ZarrDataReader:
         end_time: Optional[str] = None,
     ) -> xr.DataArray:
         """Get wind direction (degrees, meteorological) time series for a point."""
-        u10 = self.ds["u10"].sel(lat=lat, lon=lon, method="nearest")
-        v10 = self.ds["v10"].sel(lat=lat, lon=lon, method="nearest")
+        lat_name, lon_name = self._get_lat_lon_names()
+        u10 = self.ds["u10"].sel(**{lat_name: lat, lon_name: lon}, method="nearest")
+        v10 = self.ds["v10"].sel(**{lat_name: lat, lon_name: lon}, method="nearest")
         if start_time or end_time:
             u10 = u10.sel(time=slice(start_time, end_time))
             v10 = v10.sel(time=slice(start_time, end_time))
@@ -807,16 +825,17 @@ class ZarrDataReader:
     ) -> Dict:
         """Get wind speed/direction and operational status for a snapshot."""
 
+        lat_name, lon_name = self._get_lat_lon_names()
         u10 = self.ds["u10"].sel(time=time, method="nearest")
         v10 = self.ds["v10"].sel(time=time, method="nearest")
 
         if lat_min is not None or lat_max is not None:
-            u10 = u10.sel(lat=slice(lat_max, lat_min))
-            v10 = v10.sel(lat=slice(lat_max, lat_min))
+            u10 = u10.sel(**{lat_name: slice(lat_max, lat_min)})
+            v10 = v10.sel(**{lat_name: slice(lat_max, lat_min)})
 
         if lon_min is not None or lon_max is not None:
-            u10 = u10.sel(lon=slice(lon_min, lon_max))
-            v10 = v10.sel(lon=slice(lon_min, lon_max))
+            u10 = u10.sel(**{lon_name: slice(lon_min, lon_max)})
+            v10 = v10.sel(**{lon_name: slice(lon_min, lon_max)})
 
         speed_ms = np.sqrt(u10**2 + v10**2)
         speed_knots = speed_ms * 1.94384
@@ -870,8 +889,9 @@ class ZarrDataReader:
     ) -> Dict:
         """Calculate wind risk metrics for a single point."""
 
-        u10 = self.ds["u10"].sel(lat=lat, lon=lon, method="nearest")
-        v10 = self.ds["v10"].sel(lat=lat, lon=lon, method="nearest")
+        lat_name, lon_name = self._get_lat_lon_names()
+        u10 = self.ds["u10"].sel(**{lat_name: lat, lon_name: lon}, method="nearest")
+        v10 = self.ds["v10"].sel(**{lat_name: lat, lon_name: lon}, method="nearest")
 
         if start_time or end_time:
             u10 = u10.sel(time=slice(start_time, end_time))

@@ -4,7 +4,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import mapboxgl from 'mapbox-gl';
 import * as shapefile from 'shapefile';
+// @ts-ignore
 import booleanPointInPolygon from '@turf/boolean-point-in-polygon';
+// @ts-ignore
 import { point as turfPoint } from '@turf/helpers';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import './Map.css';
@@ -52,6 +54,7 @@ const Map: React.FC<MapProps> = ({
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const [isMapLoaded, setIsMapLoaded] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const landMaskRef = useRef<any | null>(null);
   const selectedPointMarkerRef = useRef<mapboxgl.Marker | null>(null);
   const hoverPopupRef = useRef<mapboxgl.Popup | null>(null);
@@ -305,6 +308,48 @@ const Map: React.FC<MapProps> = ({
       },
     );
   }, [focusBounds, isMapLoaded, initialZoom]);
+
+  // NetCDF BBox Layer
+  useEffect(() => {
+    if (!map.current || !isMapLoaded) return;
+    const showNetcdfBbox = filters?.layers?.netcdfBbox;
+    const layerId = 'netcdf-bbox';
+
+    const removeNetcdfBboxLayer = () => {
+      if (!map.current) return;
+      if (map.current.getLayer(layerId)) map.current.removeLayer(layerId);
+      if (map.current.getSource(layerId)) map.current.removeSource(layerId);
+    };
+
+    if (showNetcdfBbox) {
+      fetch(`${apiBaseUrl}/api/netcdf-bbox`)
+        .then(res => res.json())
+        .then((geojson) => {
+          removeNetcdfBboxLayer();
+          map.current!.addSource(layerId, {
+            type: 'geojson',
+            data: geojson,
+          });
+          map.current!.addLayer({
+            id: layerId,
+            type: 'line',
+            source: layerId,
+            paint: {
+              'line-color': '#ff00cc',
+              'line-width': 3,
+              'line-dasharray': [2, 2],
+            },
+          });
+        })
+        .catch((err) => {
+          console.error('Erro ao carregar NetCDF BBox:', err);
+        });
+    } else {
+      removeNetcdfBboxLayer();
+    }
+    // Cleanup on unmount
+    return removeNetcdfBboxLayer;
+  }, [filters?.layers?.netcdfBbox, isMapLoaded, apiBaseUrl]);
 
   // Load shapefile layer acima do heatmap
   const loadShapefileLayer = async (
@@ -759,12 +804,40 @@ const Map: React.FC<MapProps> = ({
     } else {
       removeLayerIfExists('campos-producao');
     }
+
+    // Handle Bounding Box Dados
+    const showBoundingBox = filters?.layers?.boundingBox;
+    if (showBoundingBox) {
+      fetch('/data/bounding_box/bounding_box_dados.geojson')
+        .then(res => res.json())
+        .then((geojson) => {
+          if (map.current.getSource('bounding-box-dados')) return;
+          map.current.addSource('bounding-box-dados', {
+            type: 'geojson',
+            data: geojson,
+          });
+          map.current.addLayer({
+            id: 'bounding-box-dados',
+            type: 'line',
+            source: 'bounding-box-dados',
+            paint: {
+              'line-color': '#00bfff',
+              'line-width': 3,
+              'line-dasharray': [2, 2],
+            },
+          });
+        });
+    } else {
+      if (map.current.getLayer('bounding-box-dados')) map.current.removeLayer('bounding-box-dados');
+      if (map.current.getSource('bounding-box-dados')) map.current.removeSource('bounding-box-dados');
+    }
   }, [hazardType, filters, isMapLoaded, hideLayers]);
 
   // Add heatmap when snapshot changes (when Visualizar is clicked)
   useEffect(() => {
     if (!snapshotTime) return;
 
+    setIsLoading(true);
     const controller = new AbortController();
 
     const loadWindSnapshot = async () => {
@@ -805,6 +878,7 @@ const Map: React.FC<MapProps> = ({
         console.log(`✅ Vento renderizado (min: ${minValue}, max: ${maxValue})`);
       } catch (error) {
         if ((error as Error).name === 'AbortError') return;
+        setIsLoading(false);
         console.error('❌ Erro ao carregar vento:', error);
       }
     };
@@ -846,6 +920,7 @@ const Map: React.FC<MapProps> = ({
         console.log(`✅ Corrente renderizada (min: ${minValue}, max: ${maxValue})`);
       } catch (error) {
         if ((error as Error).name === 'AbortError') return;
+        setIsLoading(false);
         console.error('❌ Erro ao carregar corrente:', error);
       }
     };
@@ -887,6 +962,7 @@ const Map: React.FC<MapProps> = ({
         console.log(`✅ Onda renderizada (min: ${minValue}, max: ${maxValue})`);
       } catch (error) {
         if ((error as Error).name === 'AbortError') return;
+        setIsLoading(false);
         console.error('❌ Erro ao carregar onda:', error);
       }
     };
@@ -899,7 +975,10 @@ const Map: React.FC<MapProps> = ({
       loadCurrentSnapshot();
     }
 
-    return () => controller.abort();
+    return () => {
+      setIsLoading(false);
+      controller.abort();
+    };
   }, [
     isMapLoaded,
     hazardType,
@@ -937,6 +1016,12 @@ const Map: React.FC<MapProps> = ({
         </div>
       )}
       <div ref={mapContainer} className="map" />
+      {isLoading && (
+        <div className="map-loading-overlay">
+          <div className="map-loading-spinner" />
+          <div className="map-loading-text">Calculando dados...</div>
+        </div>
+      )}
     </div>
   );
 };

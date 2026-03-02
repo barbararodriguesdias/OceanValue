@@ -2,8 +2,13 @@
 import './Header.css';
 
 interface HeaderProps {
+<<<<<<< HEAD
   activePage?: 'map' | 'analysis' | 'assets' | 'maritime-downtime' | 'climate-risk';
   onNavigate?: (page: 'map' | 'analysis' | 'assets' | 'maritime-downtime' | 'climate-risk') => void;
+=======
+  activePage?: 'climate-risk' | 'maritime-downtime' | 'assets';
+  onNavigate?: (page: 'climate-risk' | 'maritime-downtime' | 'assets') => void;
+>>>>>>> 679b437a955223e69a5f4efba330a4210e250337
 }
 
 const Header: React.FC<HeaderProps> = ({ activePage, onNavigate }) => {
@@ -17,18 +22,27 @@ const Header: React.FC<HeaderProps> = ({ activePage, onNavigate }) => {
             <p className="tagline">Climate Risk Pricing for Maritime Operations</p>
           </div>
         </div>
-
         <nav className="navigation">
           <button
+<<<<<<< HEAD
             className={`nav-link ${activePage === 'map' ? 'active' : ''}`}
             onClick={() => onNavigate?.('map')}
             style={{ fontWeight: 700 }}
           >
             Visualização
+=======
+            className={`nav-link ${activePage === 'climate-risk' ? 'active' : ''}`}
+            onClick={() => onNavigate?.('climate-risk')}
+            title="Análise de Risco Climático Regional"
+            style={{ fontWeight: 700 }}
+          >
+            Risco Climático
+>>>>>>> 679b437a955223e69a5f4efba330a4210e250337
           </button>
           <button
             className={`nav-link ${activePage === 'maritime-downtime' ? 'active' : ''}`}
             onClick={() => onNavigate?.('maritime-downtime')}
+<<<<<<< HEAD
             title="Análise de Downtime Operacional de Embarcações"
             style={{ fontWeight: 700 }}
           >
@@ -41,6 +55,12 @@ const Header: React.FC<HeaderProps> = ({ activePage, onNavigate }) => {
             style={{ fontWeight: 700 }}
           >
             Risco Climático
+=======
+            title="Downtime Marítimo"
+            style={{ fontWeight: 700 }}
+          >
+            Downtime Marítimo
+>>>>>>> 679b437a955223e69a5f4efba330a4210e250337
           </button>
           <button
             className={`nav-link ${activePage === 'assets' ? 'active' : ''}`}
@@ -50,7 +70,6 @@ const Header: React.FC<HeaderProps> = ({ activePage, onNavigate }) => {
             Meus Ativos
           </button>
         </nav>
-
         <div className="user-section">
           <button className="btn-login">Entrar</button>
         </div>
