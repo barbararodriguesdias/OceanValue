@@ -328,14 +328,14 @@ const ClimateRiskPage = () => {
     ? [
         { id: 'wind', label: 'Ventos', enabled: true },
         { id: 'wave', label: 'Ondas', enabled: true },
-        { id: 'current', label: 'Correntes (Em breve)', enabled: false },
+        { id: 'current', label: 'Correntes', enabled: false },
       ]
     : [
-        { id: 'water_scarcity', label: 'Escassez Hídrica (Em breve)', enabled: false },
+        { id: 'water_scarcity', label: 'Escassez Hídrica', enabled: false },
         { id: 'flood', label: 'Inundação', enabled: true },
-        { id: 'landslide', label: 'Deslizamento de Terra (Em breve)', enabled: false },
+        { id: 'landslide', label: 'Deslizamento de Terra', enabled: false },
         { id: 'wildfire', label: 'Incêndio', enabled: true },
-        { id: 'extreme_drought', label: 'Seca Extrema (Em breve)', enabled: false },
+        { id: 'extreme_drought', label: 'Seca Extrema', enabled: false },
       ];
 
   const toggleHazard = (hazardId: string) => {
