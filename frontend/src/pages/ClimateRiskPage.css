@@ -79,7 +79,6 @@
   transition: border-color 0.2s ease, background 0.2s ease;
 }
 
-<<<<<<< HEAD
 .climate-risk-page .mode-btn:hover:not(.active) {
   border-color: var(--brand-medium);
   background: var(--brand-light);
@@ -90,16 +89,6 @@
   border-color: var(--brand-primary);
   background: var(--brand-primary);
   color: var(--text-on-primary);
-=======
-.climate-risk-page .mode-btn:hover {
-  border-color: #94a3b8;
-  background: #f8fafc;
-}
-
-.climate-risk-page .mode-btn.active {
-  border-color: #1e3a5f;
-  background: #f8fbff;
->>>>>>> 679b437a955223e69a5f4efba330a4210e250337
 }
 
 .climate-risk-page .mode-label {
@@ -110,7 +99,6 @@
   font-weight: 700;
 }
 
-<<<<<<< HEAD
 .climate-risk-page .mode-btn.active .mode-label,
 .climate-risk-page .mode-btn:hover:not(.active) .mode-label {
   color: var(--brand-primary);
@@ -120,15 +108,12 @@
   color: var(--text-on-primary);
 }
 
-=======
->>>>>>> 679b437a955223e69a5f4efba330a4210e250337
 .climate-risk-page .mode-desc {
   display: block;
   color: #64748b;
   font-size: 0.88rem;
 }
 
-<<<<<<< HEAD
 .climate-risk-page .mode-btn:hover:not(.active) .mode-desc {
   color: var(--brand-primary);
 }
@@ -137,8 +122,6 @@
   color: rgba(255, 255, 255, 0.85);
 }
 
-=======
->>>>>>> 679b437a955223e69a5f4efba330a4210e250337
 .climate-risk-page .mode-panel h2,
 .climate-risk-page .coordinates-panel h2,
 .climate-risk-page .scenarios-panel h2 {
@@ -275,11 +258,7 @@
 }
 
 .climate-risk-page .climate-layer-checkbox:checked + .climate-layer-slider {
-<<<<<<< HEAD
   background: var(--brand-primary);
-=======
-  background: #1e3a5f;
->>>>>>> 679b437a955223e69a5f4efba330a4210e250337
 }
 
 .climate-risk-page .climate-layer-checkbox:checked + .climate-layer-slider::before {
@@ -287,11 +266,7 @@
 }
 
 .climate-risk-page .climate-layer-checkbox:focus-visible + .climate-layer-slider {
-<<<<<<< HEAD
   box-shadow: 0 0 0 2px rgba(0, 74, 100, 0.25);
-=======
-  box-shadow: 0 0 0 2px rgba(30, 58, 95, 0.18);
->>>>>>> 679b437a955223e69a5f4efba330a4210e250337
 }
 
 .climate-risk-page .analysis-mini-map .map-wrapper {
@@ -391,21 +366,14 @@
 }
 
 .climate-risk-page .hazard-btn {
-<<<<<<< HEAD
   border: 1px solid var(--brand-primary);
   background: var(--brand-primary);
   color: var(--text-on-primary);
-=======
-  border: 1px solid #cbd5e1;
-  background: #ffffff;
-  color: #1e293b;
->>>>>>> 679b437a955223e69a5f4efba330a4210e250337
   border-radius: 8px;
   padding: 9px 10px;
   cursor: pointer;
   text-align: left;
   font-weight: 600;
-<<<<<<< HEAD
   transition: background 0.2s ease, border-color 0.2s ease;
 }
 
@@ -419,19 +387,6 @@
   border-color: var(--brand-primary);
   background: var(--brand-primary);
   color: var(--text-on-primary);
-=======
-}
-
-.climate-risk-page .hazard-btn:hover:not(.disabled) {
-  border-color: #94a3b8;
-  background: #f8fafc;
-}
-
-.climate-risk-page .hazard-btn.selected {
-  border-color: #1e3a5f;
-  background: #1e3a5f;
-  color: #f8fafc;
->>>>>>> 679b437a955223e69a5f4efba330a4210e250337
 }
 
 .climate-risk-page .hazard-btn.disabled {
@@ -442,11 +397,7 @@
 .climate-risk-page .hazard-btn .badge {
   display: block;
   margin-top: 4px;
-<<<<<<< HEAD
   color: rgba(255, 255, 255, 0.7);
-=======
-  color: #94a3b8;
->>>>>>> 679b437a955223e69a5f4efba330a4210e250337
   font-size: 0.72rem;
   font-weight: 500;
 }
@@ -471,13 +422,8 @@
   border: none;
   border-radius: 10px;
   padding: 12px 14px;
-<<<<<<< HEAD
   background: var(--brand-primary);
   color: var(--text-on-primary);
-=======
-  background: #1e293b;
-  color: #f8fafc;
->>>>>>> 679b437a955223e69a5f4efba330a4210e250337
   font-size: 1rem;
   font-weight: 700;
   cursor: pointer;
@@ -485,11 +431,7 @@
 }
 
 .climate-risk-page .run-analysis-btn:hover:not(:disabled) {
-<<<<<<< HEAD
   background: var(--brand-medium);
-=======
-  background: #0f172a;
->>>>>>> 679b437a955223e69a5f4efba330a4210e250337
 }
 
 .climate-risk-page .run-analysis-btn:disabled {

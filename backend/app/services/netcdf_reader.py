@@ -1,173 +1,56 @@
+"""Service for reading local NetCDF wind and wave datasets."""
 
 from __future__ import annotations
+
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Optional, Tuple
 import os
+
 import xarray as xr
 import numpy as np
 
-# Defina o diretório base dos NetCDFs
-BASE_DIR = Path(os.environ.get("NETCDF_BASE_DIR", "D:/OceanPact/Netcdf"))
-    
+LEGACY_BASE_DIR = Path(
+    r"C:\Users\Barbara.dias\Downloads\climada_python-project\climada_python-main\OMARSAT_climada\climada-risk-analysis\src\data\Netcdf"
+)
+EXTERNAL_BASE_DIR = Path(r"D:\OceanPact\Netcdf")
+WORKSPACE_BASE_DIR = Path(__file__).resolve().parents[3] / "data" / "netcdf"
+
+
+def _resolve_base_dir() -> Path:
+    configured = os.getenv("NETCDF_BASE_DIR")
+    if configured:
+        return Path(configured).expanduser()
+
+    for candidate in (EXTERNAL_BASE_DIR, LEGACY_BASE_DIR, WORKSPACE_BASE_DIR):
+        if candidate.exists():
+            return candidate
+
+    return WORKSPACE_BASE_DIR
+
+
+BASE_DIR = _resolve_base_dir()
+
+
+@dataclass
 class NetcdfPaths:
-    def __init__(self):
-        self.wind_hist_mean = BASE_DIR / "historico" / "vento" / "sfcWind_hist_processado.nc"
-        self.wind_hist_max = BASE_DIR / "historico" / "vento" / "sfcWindmax_hist_processado.nc"
-        self.wind_pred_mean = BASE_DIR / "preditivo" / "vento" / "sfcWind_ssp585_processado.nc"
-        self.wind_pred_max = BASE_DIR / "preditivo" / "vento" / "sfcWindmax_ssp585_processado.nc"
-        self.wave_hist_mean = BASE_DIR / "historico" / "onda" / "hsmean_ww3_mri_1979_2015.nc"
-        self.wave_hist_max = BASE_DIR / "historico" / "onda" / "hsmax_ww3_mri_1979_2015.nc"
-        self.wave_pred_mean_early = BASE_DIR / "preditivo" / "onda" / "hsmean_ww3_mri_2015_2030.nc"
-        self.wave_pred_mean_late = BASE_DIR / "preditivo" / "onda" / "hsmean_ww3_mri_2031_2060.nc"
-        self.wave_pred_max_early = BASE_DIR / "preditivo" / "onda" / "hsmax_ww3_mri_2015_2030.nc"
-        self.wave_pred_max_late = BASE_DIR / "preditivo" / "onda" / "hsmax_ww3_mri_2031_2060.nc"
+    wind_hist_mean: Path = BASE_DIR / "historico" / "vento" / "sfcWind_hist_processado.nc"
+    wind_hist_max: Path = BASE_DIR / "historico" / "vento" / "sfcWindmax_hist_processado.nc"
+    wind_pred_mean: Path = BASE_DIR / "preditivo" / "vento" / "sfcWind_ssp585_processado.nc"
+    wind_pred_max: Path = BASE_DIR / "preditivo" / "vento" / "sfcWindmax_ssp585_processado.nc"
+    wave_hist_mean: Path = BASE_DIR / "historico" / "onda" / "hsmean_ww3_mri_1979_2015.nc"
+    wave_hist_max: Path = BASE_DIR / "historico" / "onda" / "hsmax_ww3_mri_1979_2015.nc"
+    wave_pred_mean_early: Path = BASE_DIR / "preditivo" / "onda" / "hsmean_ww3_mri_2015_2030.nc"
+    wave_pred_mean_late: Path = BASE_DIR / "preditivo" / "onda" / "hsmean_ww3_mri_2031_2060.nc"
+    wave_pred_max_early: Path = BASE_DIR / "preditivo" / "onda" / "hsmax_ww3_mri_2015_2030.nc"
+    wave_pred_max_late: Path = BASE_DIR / "preditivo" / "onda" / "hsmax_ww3_mri_2031_2060.nc"
 
 
 class NetcdfReader:
-    def __init__(self):
+    def __init__(self) -> None:
         self.paths = NetcdfPaths()
-        self._cache = {}
-    def get_interval_series(
-        self,
-        variable: str,
-        lat: float,
-        lon: float,
-        start_year: int,
-        end_year: int,
-        stat: str = "mean",
-    ) -> np.ndarray:
-        """
-        Análise do intervalo completo: de 1 de janeiro do ano inicial até 31 de dezembro do ano final.
-        Seleciona arquivos históricos e preditivos conforme o ano.
-        """
-        # Monta datas
-        start_date = f"{start_year}-01-01"
-        end_date = f"{end_year}-12-31"
-        # Decide arquivos
-        paths = []
-        # Histórico: 1979–2015
-        if start_year <= 2015:
-            hist_path = self._pick_wind_path(start_date, stat) if variable.startswith("sfcWind") else self._pick_wave_path(start_date, stat)
-            paths.append(hist_path)
-        # Preditivo: 2016 em diante
-        if end_year > 2015:
-            pred_path = self._pick_wind_path(end_date, stat) if variable.startswith("sfcWind") else self._pick_wave_path(end_date, stat)
-            paths.append(pred_path)
-        # Carrega e concatena
-        arrays = []
-        for path in paths:
-            print(f"[NetcdfReader] Opening NetCDF file: {path}")
-            ds = self._open(path)
-            time_name = self._find_coord(ds, ["time", "t"])
-            lat_name = self._find_coord(ds, ["lat", "latitude", "y"])
-            lon_name = self._find_coord(ds, ["lon", "longitude", "x"])
-            var_name = variable if variable in ds.data_vars else list(ds.data_vars)[0]
-            arr = ds[var_name].sel({lat_name: lat, lon_name: lon}, method="nearest")
-            arr = arr.sel({time_name: slice(start_date, end_date)})
-            arrays.append(arr)
-        # Concatena arrays
-        if arrays:
-            arr_concat = np.concatenate([a.values for a in arrays])
-            return arr_concat
-        else:
-            return np.array([])
-    def get_wind_speed_series(
-        self,
-        lat: float,
-        lon: float,
-        start_time: Optional[str] = None,
-        end_time: Optional[str] = None,
-        stat: str = "mean",
-    ) -> np.ndarray:
-        path = self._pick_wind_path(start_time or end_time or "2015-01-01", stat)
-        print(f"[NetcdfReader] Opening NetCDF file: {path}")
-        ds = self._open(path)
-        print(f"[NetcdfReader] Dataset coords: {list(ds.coords)}")
-        print(f"[NetcdfReader] Dataset dims: {list(ds.dims)}")
-        var_name = "sfcWind_corr" if "sfcWind_corr" in ds.data_vars else "sfcWind"
-        print(f"[NetcdfReader] Variable '{var_name}' dims: {ds[var_name].dims}")
-        print(f"[NetcdfReader] Variable '{var_name}' coords: {list(ds[var_name].coords)}")
-        time_name = self._find_coord(ds, ["time", "t"])
-        lat_name = self._find_coord(ds, ["lat", "latitude", "y"])
-        lon_name = self._find_coord(ds, ["lon", "longitude", "x"])
-        point = ds[var_name].sel({lat_name: lat, lon_name: lon}, method="nearest")
-        if start_time or end_time:
-            point = point.sel({time_name: slice(start_time, end_time)})
-        return np.asarray(point) * 1.9438444924406  # Convert m/s to knots
-
-    def get_wind_direction_series(
-        self,
-        lat: float,
-        lon: float,
-        start_time: Optional[str] = None,
-        end_time: Optional[str] = None,
-        stat: str = "mean",
-    ) -> np.ndarray:
-        path = self._pick_wind_path(start_time or end_time or "2015-01-01", stat)
-        print(f"[NetcdfReader] Opening NetCDF file: {path}")
-        ds = self._open(path)
-        print(f"[NetcdfReader] Dataset coords: {list(ds.coords)}")
-        print(f"[NetcdfReader] Dataset dims: {list(ds.dims)}")
-        u_var = "u10" if "u10" in ds.data_vars else None
-        v_var = "v10" if "v10" in ds.data_vars else None
-        if u_var:
-            print(f"[NetcdfReader] Variable '{u_var}' dims: {ds[u_var].dims}")
-            print(f"[NetcdfReader] Variable '{u_var}' coords: {list(ds[u_var].coords)}")
-        if v_var:
-            print(f"[NetcdfReader] Variable '{v_var}' dims: {ds[v_var].dims}")
-            print(f"[NetcdfReader] Variable '{v_var}' coords: {list(ds[v_var].coords)}")
-        time_name = self._find_coord(ds, ["time", "t"])
-        lat_name = self._find_coord(ds, ["lat", "latitude", "y"])
-        lon_name = self._find_coord(ds, ["lon", "longitude", "x"])
-        if u_var and v_var:
-            u10 = ds[u_var].sel({lat_name: lat, lon_name: lon}, method="nearest")
-            v10 = ds[v_var].sel({lat_name: lat, lon_name: lon}, method="nearest")
-            if start_time or end_time:
-                u10 = u10.sel({time_name: slice(start_time, end_time)})
-                v10 = v10.sel({time_name: slice(start_time, end_time)})
-            direction_deg = (np.degrees(np.arctan2(u10, v10)) + 180.0) % 360.0
-            return np.asarray(direction_deg)
-        else:
-            return np.zeros(ds[time_name].shape)
-
-    def get_point_series(
-        self,
-        variable: str,
-        lat: float,
-        lon: float,
-        start_time: Optional[str] = None,
-        end_time: Optional[str] = None,
-        stat: str = "mean",
-    ) -> np.ndarray:
-        # Pick correct file for wind or wave
-        if variable in ["sfcWind", "sfcWind_corr", "u10", "v10"]:
-            path = self._pick_wind_path(start_time or end_time or "2015-01-01", stat)
-        elif variable == "hs":
-            path = self._pick_wave_path(start_time or end_time or "2015-01-01", stat)
-        else:
-            raise ValueError(f"Unsupported variable: {variable}")
-        print(f"[NetcdfReader] Opening NetCDF file: {path}")
-        ds = self._open(path)
-        print(f"[NetcdfReader] Dataset coords: {list(ds.coords)}")
-        print(f"[NetcdfReader] Dataset dims: {list(ds.dims)}")
-        var_name = variable if variable in ds.data_vars else list(ds.data_vars)[0]
-        print(f"[NetcdfReader] Variable '{var_name}' dims: {ds[var_name].dims}")
-        print(f"[NetcdfReader] Variable '{var_name}' coords: {list(ds[var_name].coords)}")
-        time_name = self._find_coord(ds, ["time", "t"])
-        # Auto-select coordinate names based on variable type
-        if var_name == "hs":
-            lat_name = self._find_coord(ds, ["latitude"])
-            lon_name = self._find_coord(ds, ["longitude"])
-        else:
-            lat_name = self._find_coord(ds, ["lat"])
-            lon_name = self._find_coord(ds, ["lon"])
-        point = ds[var_name].sel({lat_name: lat, lon_name: lon}, method="nearest")
-        if start_time or end_time:
-            point = point.sel({time_name: slice(start_time, end_time)})
-        return np.asarray(point)
-
+        self._cache: Dict[Path, xr.Dataset] = {}
 
     def _open(self, path: Path) -> xr.Dataset:
         if not path.exists():
@@ -180,7 +63,7 @@ class NetcdfReader:
         return self._cache[path]
 
     @staticmethod
-    def _sanitize(values: np.ndarray):
+    def _sanitize(values: np.ndarray) -> list:
         arr = np.asarray(values)
         arr = np.where(np.isfinite(arr), arr, np.nan)
         data = arr.astype(object).tolist()

@@ -1,6 +1,5 @@
-# ...existing code...
-
-
+# Backend Main Application
+# OceanValue API
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -20,7 +19,6 @@ logger = logging.getLogger(__name__)
 
 # Import routers
 from .routers import hazards, data, analysis, reports, climate_data
-from .routers import bbox
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -48,8 +46,6 @@ app = FastAPI(
 
 # Middleware
 app.add_middleware(GZipMiddleware, minimum_size=1000)
-
-app.include_router(bbox.router, prefix="/api")
 
 app.add_middleware(
     CORSMiddleware,
@@ -103,16 +99,6 @@ async def root():
             "reports": "/api/v1/reports"
         }
     }
-    
-# Status endpoint
-@app.get("/status", tags=["Status"])
-async def status():
-    """Status endpoint for backend calculation monitoring"""
-    return {
-        "status": "running",
-        "service": "OceanValue API",
-        "version": "0.1.0"
-    }   
 
 # Error handlers
 @app.exception_handler(Exception)

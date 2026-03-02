@@ -1,12 +1,11 @@
-from ..services.netcdf_reader import netcdf_reader
+# Analysis Router
+# OceanValue API endpoints for analysis operations
+
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import Optional, Dict, List, Literal
-<<<<<<< HEAD
 from ..services.zarr_reader import zarr_reader
-=======
->>>>>>> 679b437a955223e69a5f4efba330a4210e250337
 from ..services.climate_risk_adapter import climate_risk_adapter
 from ..services.climate_risk_kernel import climate_risk_kernel
 from ..services.litpop_service import litpop_population_service
@@ -127,13 +126,6 @@ class ClimateRiskOffshoreRequest(BaseModel):
     risk_load_method: str = "none"
     risk_quantile: float = 0.95
     expense_ratio: float = 0.15
-<<<<<<< HEAD
-=======
-    # Novos campos para seleção dinâmica
-    region: str = "campos"
-    period: str = "historico"
-    stat: str = "max"
->>>>>>> 679b437a955223e69a5f4efba330a4210e250337
 
 
 class ClimateRiskOnshoreRequest(BaseModel):
@@ -156,13 +148,6 @@ class ClimateRiskOnshoreRequest(BaseModel):
     risk_load_method: str = "none"
     risk_quantile: float = 0.95
     expense_ratio: float = 0.15
-<<<<<<< HEAD
-=======
-    # Novos campos para seleção dinâmica
-    region: str = "campos"
-    period: str = "historico"
-    stat: str = "max"
->>>>>>> 679b437a955223e69a5f4efba330a4210e250337
 
 
 def _resolve_point_from_request(
@@ -281,24 +266,7 @@ def _coerce_float(value: object, default: float = 0.0) -> float:
     try:
         if value is None:
             return float(default)
-<<<<<<< HEAD
         return float(value)
-=======
-        if isinstance(value, (list, dict)):
-            return float(default)
-        # Handle numpy types
-        import numpy as np
-        if isinstance(value, np.generic):
-            return float(value.item())
-        if isinstance(value, np.ndarray):
-            if value.size == 1:
-                return float(value.item())
-            else:
-                return float(default)
-        if isinstance(value, (int, float, str)):
-            return float(value)
-        return float(default)
->>>>>>> 679b437a955223e69a5f4efba330a4210e250337
     except Exception:
         return float(default)
 
@@ -335,12 +303,6 @@ def _run_climada_analysis(
         risk_quantile=float(risk_quantile),
         risk_load_method=risk_load_method,
         expense_ratio=float(expense_ratio),
-<<<<<<< HEAD
-=======
-        region="campos",
-        period="historico",
-        stat="max",
->>>>>>> 679b437a955223e69a5f4efba330a4210e250337
     )
 
 
@@ -437,7 +399,6 @@ def _build_multi_risk_response_from_climada(
     if include_series:
         series: Dict[str, List[float]] = {}
         if "wind" in hazards_out:
-<<<<<<< HEAD
             wind_series = zarr_reader.get_wind_speed_series(lat, lon, start_time, end_time)
             series["wind"] = np.asarray(wind_series.values, dtype=float).tolist()
             direction_series = zarr_reader.get_wind_direction_series(lat, lon, start_time, end_time)
@@ -445,28 +406,6 @@ def _build_multi_risk_response_from_climada(
         if "wave" in hazards_out:
             wave_series = zarr_reader.get_point_series("hs", lat, lon, start_time, end_time)
             series["wave"] = np.asarray(wave_series.values, dtype=float).tolist()
-=======
-            wind_series = netcdf_reader.get_interval_series(
-                variable="sfcWind",
-                lat=lat,
-                lon=lon,
-                start_year=int(start_time[:4]),
-                end_year=int(end_time[:4]),
-                stat="mean"
-            )
-            series["wind"] = np.asarray(wind_series, dtype=float).tolist()
-            # TODO: Add direction_series interval logic if needed
-        if "wave" in hazards_out:
-            wave_series = netcdf_reader.get_interval_series(
-                variable="hs",
-                lat=lat,
-                lon=lon,
-                start_year=int(start_time[:4]),
-                end_year=int(end_time[:4]),
-                stat="mean"
-            )
-            series["wave"] = np.asarray(wave_series, dtype=float).tolist()
->>>>>>> 679b437a955223e69a5f4efba330a4210e250337
         payload["series"] = series
 
     if combine_mode != "worst":
@@ -602,26 +541,11 @@ async def run_wind_risk(request: WindRiskRequest):
             asset_type="platform",
         )
 
-<<<<<<< HEAD
         wind_series = zarr_reader.get_wind_speed_series(request.lat, request.lon, request.start_time, request.end_time)
         direction_series = zarr_reader.get_wind_direction_series(request.lat, request.lon, request.start_time, request.end_time)
 
         speed_knots = np.asarray(wind_series.values, dtype=float)
         direction_deg = np.asarray(direction_series.values, dtype=float)
-=======
-        wind_series = netcdf_reader.get_interval_series(
-            variable="sfcWind",
-            lat=request.lat,
-            lon=request.lon,
-            start_year=int(request.start_time[:4]),
-            end_year=int(request.end_time[:4]),
-            stat="mean"
-        )
-        # TODO: Add direction_series interval logic if needed
-
-        speed_knots = np.asarray(wind_series, dtype=float)
-        direction_deg = np.asarray(direction_series, dtype=float)
->>>>>>> 679b437a955223e69a5f4efba330a4210e250337
         op_limit = float(request.operational_max_knots)
         att_limit = float(max(request.attention_max_knots, request.operational_max_knots))
 
@@ -1025,12 +949,6 @@ async def run_climate_risk_offshore(request: ClimateRiskOffshoreRequest):
             risk_load_method=request.risk_load_method,
             risk_quantile=request.risk_quantile,
             expense_ratio=request.expense_ratio,
-<<<<<<< HEAD
-=======
-            region=request.region,
-            period=request.period,
-            stat=request.stat,
->>>>>>> 679b437a955223e69a5f4efba330a4210e250337
         )
 
         pricing_models = result.get("pricing_models") or {}
@@ -1139,12 +1057,6 @@ async def run_climate_risk_onshore(request: ClimateRiskOnshoreRequest):
             risk_load_method=request.risk_load_method,
             risk_quantile=request.risk_quantile,
             expense_ratio=request.expense_ratio,
-<<<<<<< HEAD
-=======
-            region=request.region,
-            period=request.period,
-            stat=request.stat,
->>>>>>> 679b437a955223e69a5f4efba330a4210e250337
         )
 
         pricing_models = result.get("pricing_models") or {}
