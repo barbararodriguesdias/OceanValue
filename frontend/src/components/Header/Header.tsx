@@ -2,25 +2,15 @@
 import './Header.css';
 
 interface HeaderProps {
-  onToggleDrawer?: () => void;
   activePage?: 'map' | 'analysis' | 'assets' | 'maritime-downtime' | 'climate-risk';
   onNavigate?: (page: 'map' | 'analysis' | 'assets' | 'maritime-downtime' | 'climate-risk') => void;
 }
 
-const Header: React.FC<HeaderProps> = ({ onToggleDrawer, activePage, onNavigate }) => {
+const Header: React.FC<HeaderProps> = ({ activePage, onNavigate }) => {
   return (
     <header className="header">
       <div className="header-content">
         <div className="logo-section">
-          <button
-            className="menu-toggle-btn"
-            onClick={onToggleDrawer}
-            title="Toggle Menu"
-            aria-label="Toggle Menu"
-            style={{ marginRight: '24px', marginLeft: '-12px' }}
-          >
-            &#9776;
-          </button>
           <img src="/oceanpact-logo.png" alt="OceanPact Logo" className="logo-image" style={{ marginRight: '18px', height: '40px' }} />
           <div className="logo-text">
             <h1 className="logo">OceanValue</h1>
