@@ -35,7 +35,7 @@ const ASSETS_STORAGE_KEY = 'oceanvalue_saved_assets_v1';
 function App() {
   const [currentConfig, setCurrentConfig] = React.useState<VisualizationConfig | null>(null);
   const [snapshotTime, setSnapshotTime] = React.useState<string | undefined>(undefined);
-  const [activePage, setActivePage] = React.useState<'map' | 'analysis' | 'assets' | 'maritime-downtime' | 'climate-risk'>('map');
+  const [activePage, setActivePage] = React.useState<'map' | 'analysis' | 'assets' | 'maritime-downtime' | 'climate-risk'>('climate-risk');
   const [savedAssets, setSavedAssets] = React.useState<SavedAsset[]>([]);
 
   React.useEffect(() => {

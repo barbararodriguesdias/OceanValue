@@ -19,6 +19,11 @@
   align-items: center;
   gap: 1rem;
   flex-shrink: 0;
+  transition: opacity 0.2s ease;
+}
+
+.logo-section:hover {
+  opacity: 0.85;
 }
 
 .logo-image {
@@ -80,7 +85,6 @@
   gap: 1rem;
   align-items: center;
   flex-shrink: 0;
-  margin-left: auto;
 }
 
 .btn-login {

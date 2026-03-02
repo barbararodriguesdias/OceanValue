@@ -332,9 +332,9 @@ const ClimateRiskPage = () => {
       ]
     : [
         { id: 'water_scarcity', label: 'Escassez Hídrica', enabled: false },
-        { id: 'flood', label: 'Inundação', enabled: true },
+        { id: 'flood', label: 'Inundação', enabled: false },
         { id: 'landslide', label: 'Deslizamento de Terra', enabled: false },
-        { id: 'wildfire', label: 'Incêndio', enabled: true },
+        { id: 'wildfire', label: 'Incêndio', enabled: false },
         { id: 'extreme_drought', label: 'Seca Extrema', enabled: false },
       ];
 
@@ -670,7 +670,7 @@ const ClimateRiskPage = () => {
                 </div>
               )}
               {selectedHazards.includes('wave') && (
-                <div className="form-row">
+                <div className="form-row" style={{ marginTop: selectedHazards.includes('wind') ? 0 : 12 }}>
                   <div className="form-group">
                     <label>Onda - Limite operacional (m)</label>
                     <input
@@ -768,7 +768,7 @@ const ClimateRiskPage = () => {
             onClick={handleRunAnalysis}
             disabled={loading || selectedHazards.length === 0}
           >
-            {loading ? 'Analisando...' : 'Executar análise de risco climático'}
+            {loading ? 'Analisando...' : 'EXECUTAR'}
           </button>
           {result && (
             <button

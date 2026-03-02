@@ -280,7 +280,7 @@
 }
 
 .climate-risk-page .analysis-hint {
-  margin: 0;
+  margin: 8px 0 0 0;
   color: #64748b;
   font-size: 0.85rem;
 }
@@ -417,8 +417,14 @@
   line-height: 1.45;
 }
 
+.climate-risk-page .analysis-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
 .climate-risk-page .run-analysis-btn {
-  width: 100%;
+  width: 50%;
   border: none;
   border-radius: 10px;
   padding: 12px 14px;

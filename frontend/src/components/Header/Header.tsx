@@ -10,7 +10,7 @@ const Header: React.FC<HeaderProps> = ({ activePage, onNavigate }) => {
   return (
     <header className="header">
       <div className="header-content">
-        <div className="logo-section">
+        <div className="logo-section" onClick={() => onNavigate?.('climate-risk')} style={{ cursor: 'pointer' }}>
           <img src="/oceanpact-logo.png" alt="OceanPact Logo" className="logo-image" style={{ marginRight: '18px', height: '40px' }} />
           <div className="logo-text">
             <h1 className="logo">OceanValue</h1>
@@ -20,11 +20,12 @@ const Header: React.FC<HeaderProps> = ({ activePage, onNavigate }) => {
 
         <nav className="navigation">
           <button
-            className={`nav-link ${activePage === 'map' ? 'active' : ''}`}
-            onClick={() => onNavigate?.('map')}
+            className={`nav-link ${activePage === 'climate-risk' ? 'active' : ''}`}
+            onClick={() => onNavigate?.('climate-risk')}
+            title="Análise de Risco Climático Regional"
             style={{ fontWeight: 700 }}
           >
-            Visualização
+            Risco Climático
           </button>
           <button
             className={`nav-link ${activePage === 'maritime-downtime' ? 'active' : ''}`}
@@ -33,14 +34,6 @@ const Header: React.FC<HeaderProps> = ({ activePage, onNavigate }) => {
             style={{ fontWeight: 700 }}
           >
             Downtime Marítimo
-          </button>
-          <button
-            className={`nav-link ${activePage === 'climate-risk' ? 'active' : ''}`}
-            onClick={() => onNavigate?.('climate-risk')}
-            title="Análise de Risco Climático Regional"
-            style={{ fontWeight: 700 }}
-          >
-            Risco Climático
           </button>
           <button
             className={`nav-link ${activePage === 'assets' ? 'active' : ''}`}
