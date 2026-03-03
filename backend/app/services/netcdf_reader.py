@@ -86,7 +86,16 @@ class NetcdfReader:
         ds = self._open(path)
         print(f"[NetcdfReader] Dataset coords: {list(ds.coords)}")
         print(f"[NetcdfReader] Dataset dims: {list(ds.dims)}")
-        var_name = "sfcWind_corr" if "sfcWind_corr" in ds.data_vars else "sfcWind"
+        if stat == "max":
+            candidates = ["sfcWindmax_corr", "sfcWindmax"]
+        else:
+            candidates = ["sfcWind_corr", "sfcWind", "sfcWindmax_corr", "sfcWindmax"]
+        var_name = next((v for v in candidates if v in ds.data_vars), None)
+        if var_name is None:
+            raise KeyError(f"Nenhuma variável de vento encontrada. Disponíveis: {list(ds.data_vars)}")
+        if "_corr" not in var_name:
+            print(f"[NetcdfReader] Aviso: usando variável não corrigida '{var_name}' (não encontrei *_corr)")
+
         print(f"[NetcdfReader] Variable '{var_name}' dims: {ds[var_name].dims}")
         print(f"[NetcdfReader] Variable '{var_name}' coords: {list(ds[var_name].coords)}")
         time_name = self._find_coord(ds, ["time", "t"])
@@ -95,7 +104,14 @@ class NetcdfReader:
         point = ds[var_name].sel({lat_name: lat, lon_name: lon}, method="nearest")
         if start_time or end_time:
             point = point.sel({time_name: slice(start_time, end_time)})
-        return np.asarray(point) * 1.9438444924406  # Convert m/s to knots
+        values = np.asarray(point)
+
+        # Detect units and convert if in m/s
+        units = str(point.attrs.get("units", "")).lower()
+        needs_knots = any(u in units for u in ["m/s", "m s-1", "meter per second", "metros/segundo"])
+        if needs_knots or units == "":
+            values = values * 1.9438444924406
+        return values  # Already in knots if converted
 
     def get_wind_direction_series(
         self,
@@ -158,11 +174,11 @@ class NetcdfReader:
         time_name = self._find_coord(ds, ["time", "t"])
         # Auto-select coordinate names based on variable type
         if var_name == "hs":
-            lat_name = self._find_coord(ds, ["latitude"])
-            lon_name = self._find_coord(ds, ["longitude"])
+            lat_name = self._find_coord(ds, ["lat", "latitude", "y"])
+            lon_name = self._find_coord(ds, ["lon", "longitude", "x"])
         else:
-            lat_name = self._find_coord(ds, ["lat"])
-            lon_name = self._find_coord(ds, ["lon"])
+            lat_name = self._find_coord(ds, ["lat", "latitude", "y"])
+            lon_name = self._find_coord(ds, ["lon", "longitude", "x"])
         point = ds[var_name].sel({lat_name: lat, lon_name: lon}, method="nearest")
         if start_time or end_time:
             point = point.sel({time_name: slice(start_time, end_time)})

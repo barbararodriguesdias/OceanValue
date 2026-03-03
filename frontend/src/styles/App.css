@@ -1,12 +1,9 @@
+@import url('https://fonts.googleapis.com/css2?family=Fira+Sans+Condensed:wght@300;400;600;700&display=swap');
 
 :root {
   --brand-primary: #006aba;
   --text-on-primary: #fff;
 }
-
-/* OceanValue App Main Styles */
-
-@import url('https://fonts.googleapis.com/css2?family=Fira+Sans+Condensed:wght@300;400;600;700&display=swap');
 
 * {
   margin: 0;

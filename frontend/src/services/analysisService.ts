@@ -301,6 +301,8 @@ export interface WaveScenarioComparisonRequest {
   stat?: 'mean' | 'max';
   start_year?: string;
   end_year?: string;
+  historical_period?: string;
+  future_period?: string;
   operational_max_meters?: number;
   attention_max_meters?: number;
 }
@@ -472,6 +474,61 @@ export interface ClimateRiskResult {
     historical_period: string;
     future_period: string;
     change_percent: number;
+    projected_aal?: number;
+    projected_pml?: number;
+    hazard_changes?: Record<string, {
+      historical_p95: number;
+      future_p95: number;
+      historical_aal: number;
+      future_aal: number;
+      historical_pml: number;
+      future_pml: number;
+      historical_min?: number;
+      future_min?: number;
+      historical_mean?: number;
+      future_mean?: number;
+      historical_max?: number;
+      future_max?: number;
+      basis?: string;
+      change_percent: number;
+    }>;
+    series?: Record<string, {
+      historical_time?: string[];
+      historical_values?: number[];
+      future_time?: string[];
+      future_values?: number[];
+      historical_years?: number[];
+      future_years?: number[];
+      historical_yearly_mean_knots?: number[];
+      future_yearly_mean_knots?: number[];
+      historical_yearly_mean_meters?: number[];
+      future_yearly_mean_meters?: number[];
+      monthly_labels?: string[];
+      historical_monthly_mean_knots?: Array<number | null>;
+      future_monthly_mean_knots?: Array<number | null>;
+      historical_monthly_mean_meters?: Array<number | null>;
+      future_monthly_mean_meters?: Array<number | null>;
+      historical_monthly_quantiles?: Record<string, Array<number | null>>;
+      future_monthly_quantiles?: Record<string, Array<number | null>>;
+    }>;
+    climada_graphs?: Record<string, {
+      historical_return_period_curve?: { return_period: number[]; impact: number[] };
+      future_return_period_curve?: { return_period: number[]; impact: number[] };
+      historical_loss_exceedance_curve?: { probability: number[]; loss: number[] };
+      future_loss_exceedance_curve?: { probability: number[]; loss: number[] };
+    }>;
+    uncertainty?: Record<string, {
+      parameters?: {
+        intensity_factor?: number[];
+        frequency_factor?: number[];
+        threshold_factor?: number[];
+      };
+      future?: {
+        aal?: { p05: number; p50: number; p95: number };
+        pml?: { p05: number; p50: number; p95: number };
+        return_period_curve?: { return_period: number[]; p05: number[]; p50: number[]; p95: number[] };
+      };
+    }>;
   };
   pricing_engine?: string | null;
   petals_enabled?: boolean;

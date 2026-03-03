@@ -492,6 +492,61 @@ def _build_climate_risk_pdf(title: str, request: BaseModel, result: Dict) -> Byt
     pdf.drawString(40, y, f"TVaR: {tvar_value:.2f} BRL")
     y -= 20
 
+    scenario_cmp = result.get("scenario_comparison") or {}
+    if scenario_cmp:
+        pdf.setFont("Helvetica-Bold", 11)
+        pdf.drawString(40, y, "Cenário climático")
+        y -= 14
+        pdf.setFont("Helvetica", 10)
+        pdf.drawString(40, y, f"SSP: {scenario_cmp.get('ssp_scenario', '-')}")
+        y -= 12
+        pdf.drawString(40, y, f"Período hist.: {scenario_cmp.get('historical_period', '-')}")
+        y -= 12
+        pdf.drawString(40, y, f"Período fut.: {scenario_cmp.get('future_period', '-')}")
+        y -= 12
+        pdf.drawString(40, y, f"Mudança agregada: {scenario_cmp.get('change_percent', 0.0):.2f}%")
+        y -= 12
+        if scenario_cmp.get("projected_aal") is not None or scenario_cmp.get("projected_pml") is not None:
+            pdf.drawString(
+                40,
+                y,
+                f"Proj. AAL: {scenario_cmp.get('projected_aal', 0.0):.2f} BRL | Proj. PML: {scenario_cmp.get('projected_pml', 0.0):.2f} BRL",
+            )
+            y -= 14
+        hazard_changes = scenario_cmp.get("hazard_changes") or {}
+        if hazard_changes:
+            pdf.setFont("Helvetica-Bold", 10)
+            pdf.drawString(40, y, "Hazards")
+            y -= 12
+            pdf.setFont("Helvetica", 9)
+            for haz, change in hazard_changes.items():
+                if y < 80:
+                    pdf.showPage()
+                    y = height - 60
+                    pdf.setFont("Helvetica-Bold", 10)
+                    pdf.drawString(40, y, "Hazards (cont.)")
+                    y -= 14
+                    pdf.setFont("Helvetica", 9)
+                pdf.drawString(40, y, f"{haz.upper()} Δ {change.get('change_percent', 0.0):.2f}% (base {change.get('basis', 'p95')})")
+                y -= 12
+                pdf.drawString(
+                    40,
+                    y,
+                    f"AAL {change.get('historical_aal', 0.0):.2f} → {change.get('future_aal', 0.0):.2f} | PML {change.get('historical_pml', 0.0):.2f} → {change.get('future_pml', 0.0):.2f}",
+                )
+                y -= 12
+                uncert = (scenario_cmp.get("uncertainty") or {}).get(haz) or {}
+                if uncert.get("future"):
+                    aal_unc = uncert["future"].get("aal", {})
+                    pml_unc = uncert["future"].get("pml", {})
+                    pdf.drawString(
+                        40,
+                        y,
+                        f"AAL banda p05 {aal_unc.get('p05', 0.0):.2f} | p95 {aal_unc.get('p95', 0.0):.2f} | PML banda p05 {pml_unc.get('p05', 0.0):.2f} | p95 {pml_unc.get('p95', 0.0):.2f}",
+                    )
+                    y -= 12
+                y -= 2
+
     y = _draw_climate_vulnerability_profile(pdf, result, y)
 
     insights = result.get("insights") or []
@@ -583,10 +638,19 @@ async def run_wind_risk(request: WindRiskRequest):
             end_year=int(request.end_time[:4]),
             stat="mean"
         )
-        # TODO: Add direction_series interval logic if needed
 
-        speed_knots = np.asarray(wind_series, dtype=float)
-        direction_deg = np.asarray(direction_series, dtype=float)
+        speed_knots = np.asarray(wind_series, dtype=float) * 1.9438444924406
+        try:
+            direction_series = netcdf_reader.get_wind_direction_series(
+                lat=request.lat,
+                lon=request.lon,
+                start_time=request.start_time,
+                end_time=request.end_time,
+                stat="mean",
+            )
+            direction_deg = np.asarray(direction_series, dtype=float)
+        except Exception:
+            direction_deg = np.zeros(speed_knots.size, dtype=float)
         op_limit = float(request.operational_max_knots)
         att_limit = float(max(request.attention_max_knots, request.operational_max_knots))
 
@@ -1052,10 +1116,19 @@ async def run_climate_risk_offshore(request: ClimateRiskOffshoreRequest):
                 future_period=request.scenario.future_period,
                 base_aal=float(pricing_models.get("aal", 0.0)),
                 base_pml=float(pricing_models.get("pml", 0.0)),
+                asset_value=float(request.asset_value),
+                thresholds=selected_thresholds,
+                attention_loss_factor=request.attention_loss_factor,
+                stop_loss_factor=request.stop_loss_factor,
+                risk_quantile=request.risk_quantile,
+                risk_load_method=request.risk_load_method,
+                expense_ratio=request.expense_ratio,
             )
 
-        return response
+        return climada_wind_wave_service._to_serializable(response)
     except Exception as exc:
+        import traceback, logging
+        logging.getLogger(__name__).error("Erro em climate-risk-offshore", exc_info=True)
         raise HTTPException(status_code=500, detail=str(exc))
 
 
@@ -1196,10 +1269,19 @@ async def run_climate_risk_onshore(request: ClimateRiskOnshoreRequest):
                 future_period=request.scenario.future_period,
                 base_aal=float(pricing_models.get("aal", 0.0)),
                 base_pml=float(pricing_models.get("pml", 0.0)),
+                asset_value=float(request.asset_value),
+                thresholds=selected_thresholds,
+                attention_loss_factor=request.attention_loss_factor,
+                stop_loss_factor=request.stop_loss_factor,
+                risk_quantile=request.risk_quantile,
+                risk_load_method=request.risk_load_method,
+                expense_ratio=request.expense_ratio,
             )
 
         return response
     except Exception as exc:
+        import traceback, logging
+        logging.getLogger(__name__).error("Erro em climate-risk-onshore", exc_info=True)
         raise HTTPException(status_code=500, detail=str(exc))
 
 

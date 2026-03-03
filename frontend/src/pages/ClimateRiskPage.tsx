@@ -1,10 +1,22 @@
-// ...existing code...
 import * as shapefile from 'shapefile';
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  BarElement,
+  Tooltip,
+  Legend,
+  Filler,
+} from 'chart.js';
 import { Line, Bar } from 'react-chartjs-2';
 import { analysisService, ClimateRiskResult } from '../services/analysisService';
 import Map from '../components/Map/Map';
 import './ClimateRiskPage.css';
+
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, Tooltip, Legend, Filler);
 
 type AssetType =
   | 'platform'
@@ -260,6 +272,112 @@ const ClimateRiskPage = () => {
   const [result, setResult] = useState<ClimateRiskResult | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   // Removed unused state variables: region, period, stat
+
+  const formatCurrency = (value?: number | null) => (typeof value === 'number'
+    ? value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+    : 'N/A');
+
+  const formatNumber = (value?: number | null, digits = 2) => (typeof value === 'number'
+    ? value.toFixed(digits)
+    : 'N/A');
+
+  const hazardLabelMap: Record<string, string> = { wind: 'Vento', wave: 'Onda' };
+  const monthNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+
+  const aggregateDailySeries = (
+    timestamps?: string[],
+    values?: Array<number | null>,
+  ): { dates: string[]; mean: Array<number | null>; max: Array<number | null> } => {
+    if (!timestamps || !values || !timestamps.length || !values.length) return { dates: [], mean: [], max: [] };
+    const buckets: globalThis.Map<string, number[]> = new globalThis.Map();
+    timestamps.forEach((ts, idx) => {
+      const val = values[idx];
+      if (val === null || val === undefined || Number.isNaN(val)) return;
+      const day = ts.slice(0, 10);
+      if (!buckets.has(day)) buckets.set(day, []);
+      buckets.get(day)?.push(val);
+    });
+    const dates = Array.from(buckets.keys()).sort((a, b) => a.localeCompare(b));
+    const mean = dates.map((d) => {
+      const arr = buckets.get(d) || [];
+      if (!arr.length) return null;
+      const sum = arr.reduce((acc: number, v: number) => acc + v, 0);
+      return sum / arr.length;
+    });
+    const max = dates.map((d) => {
+      const arr = buckets.get(d) || [];
+      if (!arr.length) return null;
+      return Math.max(...arr);
+    });
+    return { dates, mean, max };
+  };
+
+  const mergeDailySeries = (
+    hist: { dates: string[]; mean: Array<number | null>; max: Array<number | null> },
+    fut: { dates: string[]; mean: Array<number | null>; max: Array<number | null> },
+  ) => {
+    const labels = Array.from(new Set([...hist.dates, ...fut.dates])).sort((a, b) => a.localeCompare(b));
+    const align = (source: { dates: string[]; mean: Array<number | null>; max: Array<number | null> }, key: 'mean' | 'max') => (
+      labels.map((label) => {
+        const idx = source.dates.indexOf(label);
+        if (idx === -1) return null;
+        return source[key][idx] ?? null;
+      })
+    );
+    return {
+      labels,
+      histMean: align(hist, 'mean'),
+      futMean: align(fut, 'mean'),
+      histMax: align(hist, 'max'),
+      futMax: align(fut, 'max'),
+    };
+  };
+
+  const renderQuantileTable = (
+    quantiles?: Record<string, Array<number | null>>,
+    title?: string,
+    wrapInCard: boolean = true,
+  ) => {
+    if (!quantiles) return null;
+    const rows = ['p50', 'p90', 'p95', 'p99'];
+    const table = (
+      <table className="quantile-table">
+        {title && (
+          <caption>{title}</caption>
+        )}
+        <thead>
+          <tr>
+            <th>Quantil</th>
+            {monthNames.map((m) => (
+              <th key={m}>{m}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((rowKey) => (
+            <tr key={rowKey}>
+              <th scope="row">{rowKey.toUpperCase()}</th>
+              {monthNames.map((m, idx) => {
+                const val = quantiles[rowKey]?.[idx];
+                return (
+                  <td key={`${rowKey}-${m}`}>
+                    {typeof val === 'number' ? val.toFixed(2) : '—'}
+                  </td>
+                );
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    );
+
+    if (!wrapInCard) return table;
+    return (
+      <div className="result-card">
+        {table}
+      </div>
+    );
+  };
 
   useEffect(() => {
     const profile = ASSET_LIMIT_PROFILES[assetType] ?? ASSET_LIMIT_PROFILES.platform;
@@ -802,82 +920,328 @@ const ClimateRiskPage = () => {
               <h2>
                 Resultados da análise - modo {analysisMode === 'offshore' ? 'Offshore' : 'Onshore'}
               </h2>
-              {analysisMode === 'offshore' ? (
-                <div className="results-grid">
-                  <div className="result-card">
-                    <h3>Métricas de Risco</h3>
-                    <div className="metric">
-                      <span className="value">
-                        {result && typeof result.aal === 'number'
-                          ? result.aal.toLocaleString('pt-BR', {
-                              style: 'currency',
-                              currency: 'BRL',
-                            })
-                          : 'N/A'}
-                      </span>
+              <div className="results-stack">
+                <div className="result-card wide-card metrics-inline">
+                  <h3>Métricas de Risco</h3>
+                  <div className="metric-row">
+                    <div className="metric-pill">
                       <span className="label">AAL (Perda Anual Esperada)</span>
+                      <span className="value">{formatCurrency(result?.aal)}</span>
                     </div>
-                    <div className="metric">
-                      <span className="value">
-                        {result && typeof result.pml === 'number'
-                          ? result.pml.toLocaleString('pt-BR', {
-                              style: 'currency',
-                              currency: 'BRL',
-                            })
-                          : 'N/A'}
-                      </span>
+                    <div className="metric-pill">
                       <span className="label">PML (Perda Máxima Provável)</span>
+                      <span className="value">{formatCurrency(result?.pml)}</span>
                     </div>
                   </div>
-                  {result && result.scenario_comparison && typeof result.scenario_comparison.change_percent === 'number' && scenario && scenario.ssp_scenario ? (
-                    <div className="result-card">
-                      <h3>Comparação de Cenários</h3>
-                      <div className="metric">
-                        <span className="value">{result.scenario_comparison.change_percent}%</span>
-                        <span className="label">Mudança Projetada ({scenario.ssp_scenario})</span>
+                </div>
+                {analysisMode === 'onshore' && (
+                  <div className="result-card wide-card">
+                    <h3>Métricas Populacionais</h3>
+                    <div className="metric-row">
+                      <div className="metric-pill">
+                        <span className="label">População Total</span>
+                        <span className="value">{typeof result.total_population === 'number' ? result.total_population.toLocaleString('pt-BR') : 'N/A'}</span>
+                      </div>
+                      <div className="metric-pill">
+                        <span className="label">População em Risco</span>
+                        <span className="value">{typeof result.affected_population === 'number' ? result.affected_population.toLocaleString('pt-BR') : 'N/A'}</span>
                       </div>
                     </div>
-                  ) : null}
-                </div>
-              ) : (
-                <div className="results-grid">
-                  <div className="result-card">
-                    <h3>Métricas Populacionais</h3>
-                    {includePopulation && (
-                      <>
+                  </div>
+                )}
+                <div className="result-card wide-card">
+                  <h3>Comparação de Cenários</h3>
+                  {result.scenario_comparison ? (
+                    <>
+                      <div className="scenario-grid">
                         <div className="metric">
-                          <span className="value">
-                            {result && typeof result.total_population === 'number'
-                              ? result.total_population.toLocaleString('pt-BR')
-                              : 'N/A'}
-                          </span>
-                          <span className="label">População Total</span>
+                          <span className="value">{formatNumber(result.scenario_comparison.change_percent, 1)}%</span>
+                          <span className="label">Mudança projetada ({result.scenario_comparison.ssp_scenario})</span>
                         </div>
                         <div className="metric">
-                          <span className="value">
-                            {result && typeof result.affected_population === 'number'
-                              ? result.affected_population.toLocaleString('pt-BR')
-                              : 'N/A'}
-                          </span>
-                          <span className="label">População em Risco</span>
+                          <span className="value">{formatCurrency(result.scenario_comparison.projected_aal)}</span>
+                          <span className="label">AAL projetada ({result.scenario_comparison.future_period})</span>
                         </div>
-                      </>
-                    )}
-                  </div>
-                  <div className="result-card">
-                    <h3>Impacto Econômico</h3>
-                    <div className="metric">
-                      <span className="value">
-                        {result && typeof result.aal === 'number'
-                          ? result.aal.toLocaleString('pt-BR', {
-                              style: 'currency',
-                              currency: 'BRL',
-                        }): 'N/A'}
-                      </span>
-                      <span className="label">AAL</span>
-                    </div>
-                  </div>
+                        <div className="metric">
+                          <span className="value">{formatCurrency(result.scenario_comparison.projected_pml)}</span>
+                          <span className="label">PML projetada ({result.scenario_comparison.future_period})</span>
+                        </div>
+                        <div className="metric">
+                          <span className="value">{result.scenario_comparison.historical_period}</span>
+                          <span className="label">Período histórico</span>
+                        </div>
+                        <div className="metric">
+                          <span className="value">{result.scenario_comparison.future_period}</span>
+                          <span className="label">Período futuro</span>
+                        </div>
+                      </div>
+                      {result.scenario_comparison.uncertainty && (
+                        <div className="analysis-hint" style={{ marginTop: 8 }}>
+                          Bandas (futuro) por hazard: {Object.entries(result.scenario_comparison.uncertainty).map(([hz, unc]) => (
+                            <span key={hz} style={{ marginRight: 10 }}>
+                              <strong>{hazardLabelMap[hz] || hz}:</strong>
+                              {' '}AAL p05/p50/p95 {formatCurrency((unc as any)?.future?.aal?.p05)} | {formatCurrency((unc as any)?.future?.aal?.p50)} | {formatCurrency((unc as any)?.future?.aal?.p95)};
+                              {' '}PML p05/p50/p95 {formatCurrency((unc as any)?.future?.pml?.p05)} | {formatCurrency((unc as any)?.future?.pml?.p50)} | {formatCurrency((unc as any)?.future?.pml?.p95)}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <p className="analysis-hint">Ative cenários para ver o comparativo histórico x futuro.</p>
+                  )}
                 </div>
+              </div>
+
+              {result.scenario_comparison && (
+                <section className="results-subsection">
+                  <h3>Hazard stack - histórico x futuro</h3>
+                  {((Object.keys(result.scenario_comparison.hazard_changes || {}).length
+                    ? Object.keys(result.scenario_comparison.hazard_changes || {})
+                    : ['wind', 'wave'])
+                    .filter((h) => ['wind', 'wave'].includes(h))
+                    .map((hazard) => {
+                      const hazardChange = result.scenario_comparison?.hazard_changes?.[hazard];
+                      const hazardSeries = result.scenario_comparison?.series?.[hazard] as any;
+                      const hazardGraphs = result.scenario_comparison?.climada_graphs?.[hazard] as any;
+                      const hazardUncertainty = (result.scenario_comparison?.uncertainty as any)?.[hazard]?.future;
+                      const hazardUncertaintyParams = (result.scenario_comparison?.uncertainty as any)?.[hazard]?.parameters;
+
+                      const histReturn = hazardGraphs?.historical_return_period_curve;
+                      const futReturn = hazardGraphs?.future_return_period_curve;
+                      const returnLabels = histReturn?.return_period?.length ? histReturn.return_period : futReturn?.return_period || [];
+
+                      const histLec = hazardGraphs?.historical_loss_exceedance_curve;
+                      const futLec = hazardGraphs?.future_loss_exceedance_curve;
+                      const lecLabels = histLec?.probability?.length ? histLec.probability : futLec?.probability || [];
+
+                      const histDaily = aggregateDailySeries(
+                        hazardSeries?.historical_time as string[] | undefined,
+                        hazardSeries?.historical_values as Array<number | null> | undefined,
+                      );
+                      const futDaily = aggregateDailySeries(
+                        hazardSeries?.future_time as string[] | undefined,
+                        hazardSeries?.future_values as Array<number | null> | undefined,
+                      );
+                      const mergedDaily = mergeDailySeries(histDaily, futDaily);
+
+                      const histQuant = hazardSeries?.historical_monthly_quantiles as Record<string, Array<number | null>>;
+                      const futQuant = hazardSeries?.future_monthly_quantiles as Record<string, Array<number | null>>;
+
+                      const rpBands = hazardUncertainty?.return_period_curve || hazardUncertainty?.future?.return_period_curve;
+                      const rpBandLabels = rpBands?.return_period?.length ? rpBands.return_period : returnLabels;
+
+                      return (
+                        <div key={hazard} className="hazard-stack">
+                          <h4>{hazardLabelMap[hazard] || hazard}</h4>
+
+                          <div className="result-card wide-card">
+                            <h4>Curvas de risco (retorno x LEC)</h4>
+                            <div className="dual-chart-grid">
+                              <div className="climate-chart-card">
+                                <h5>Curva de Retorno (histórico x futuro)</h5>
+                                {(returnLabels && (histReturn?.impact?.length || futReturn?.impact?.length)) ? (
+                                  <Line
+                                    data={{
+                                      labels: (rpBandLabels || returnLabels).map((v: number) => `${v} anos`),
+                                      datasets: [
+                                        histReturn?.impact?.length ? {
+                                          label: 'Histórico',
+                                          data: histReturn.impact,
+                                          borderColor: '#1d4ed8',
+                                          backgroundColor: 'rgba(29, 78, 216, 0.12)',
+                                          fill: false,
+                                          tension: 0.18,
+                                        } : undefined,
+                                        futReturn?.impact?.length ? {
+                                          label: 'Futuro',
+                                          data: futReturn.impact,
+                                          borderColor: '#16a34a',
+                                          backgroundColor: 'rgba(22, 163, 74, 0.12)',
+                                          fill: false,
+                                          tension: 0.18,
+                                        } : undefined,
+                                        rpBands?.p05?.length ? {
+                                          label: 'Futuro p05',
+                                          data: rpBands.p05,
+                                          borderColor: '#0f172a',
+                                          borderDash: [6, 4],
+                                          fill: false,
+                                          tension: 0.18,
+                                        } : undefined,
+                                        rpBands?.p95?.length ? {
+                                          label: 'Futuro p95',
+                                          data: rpBands.p95,
+                                          borderColor: '#0f172a',
+                                          borderDash: [6, 4],
+                                          fill: false,
+                                          tension: 0.18,
+                                        } : undefined,
+                                      ].filter(Boolean) as any,
+                                    }}
+                                    options={{ responsive: true, maintainAspectRatio: false, spanGaps: true }}
+                                  />
+                                ) : <p className="analysis-hint">Sem dados de curva de retorno.</p>}
+                              </div>
+
+                              <div className="climate-chart-card">
+                                <h5>Curva de Excedência de Perdas (LEC)</h5>
+                                {(lecLabels && (histLec?.loss?.length || futLec?.loss?.length)) ? (
+                                  <Line
+                                    data={{
+                                      labels: lecLabels.map((v: number) => `${(v * 100).toFixed(1)}%`),
+                                      datasets: [
+                                        histLec?.loss?.length ? {
+                                          label: 'Histórico',
+                                          data: histLec.loss,
+                                          borderColor: '#0f766e',
+                                          backgroundColor: 'rgba(15, 118, 110, 0.14)',
+                                          fill: true,
+                                          tension: 0.2,
+                                        } : undefined,
+                                        futLec?.loss?.length ? {
+                                          label: 'Futuro',
+                                          data: futLec.loss,
+                                          borderColor: '#7c3aed',
+                                          backgroundColor: 'rgba(124, 58, 237, 0.12)',
+                                          fill: true,
+                                          tension: 0.2,
+                                        } : undefined,
+                                        hazardUncertainty?.pml?.p05 ? {
+                                          label: 'PML p05',
+                                          data: lecLabels.map(() => hazardUncertainty.pml?.p05 ?? null),
+                                          borderColor: '#0f172a',
+                                          borderDash: [6, 4],
+                                          fill: false,
+                                        } : undefined,
+                                        hazardUncertainty?.pml?.p95 ? {
+                                          label: 'PML p95',
+                                          data: lecLabels.map(() => hazardUncertainty.pml?.p95 ?? null),
+                                          borderColor: '#0f172a',
+                                          borderDash: [6, 4],
+                                          fill: false,
+                                        } : undefined,
+                                      ].filter(Boolean) as any,
+                                    }}
+                                    options={{ responsive: true, maintainAspectRatio: false, spanGaps: true }}
+                                  />
+                                ) : <p className="analysis-hint">Sem dados de LEC.</p>}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="result-card wide-card stats-card">
+                            <h4>Estatísticas e incerteza</h4>
+                            {hazardChange ? (
+                              <>
+                                <div className="stats-grid">
+                                  <div className="stats-column">
+                                    <p><strong>Histórico</strong></p>
+                                    <p><strong>Min:</strong> {formatNumber(hazardChange.historical_min)}</p>
+                                    <p><strong>Média:</strong> {formatNumber(hazardChange.historical_mean)}</p>
+                                    <p><strong>Máx:</strong> {formatNumber(hazardChange.historical_max)}</p>
+                                    <p><strong>AAL:</strong> {formatCurrency(hazardChange.historical_aal)}</p>
+                                    <p><strong>PML:</strong> {formatCurrency(hazardChange.historical_pml)}</p>
+                                  </div>
+                                  <div className="stats-column">
+                                    <p><strong>Futuro</strong></p>
+                                    <p><strong>Min:</strong> {formatNumber(hazardChange.future_min)}</p>
+                                    <p><strong>Média:</strong> {formatNumber(hazardChange.future_mean)}</p>
+                                    <p><strong>Máx:</strong> {formatNumber(hazardChange.future_max)}</p>
+                                    <p><strong>AAL:</strong> {formatCurrency(hazardChange.future_aal)}</p>
+                                    <p><strong>PML:</strong> {formatCurrency(hazardChange.future_pml)}</p>
+                                  </div>
+                                  <div className="stats-column">
+                                    <p><strong>Delta / Bandas</strong></p>
+                                    <p><strong>Δ P95:</strong> {formatNumber(hazardChange.future_p95 - hazardChange.historical_p95)}</p>
+                                    <p><strong>Δ AAL:</strong> {formatCurrency(hazardChange.future_aal - hazardChange.historical_aal)}</p>
+                                    <p><strong>Δ PML:</strong> {formatCurrency(hazardChange.future_pml - hazardChange.historical_pml)}</p>
+                                    <p><strong>Mudança %:</strong> {formatNumber(hazardChange.change_percent, 1)}%</p>
+                                    {hazardUncertainty?.aal && (
+                                      <p><strong>Futuro AAL p05/p50/p95:</strong> {formatCurrency(hazardUncertainty.aal.p05)} | {formatCurrency(hazardUncertainty.aal.p50)} | {formatCurrency(hazardUncertainty.aal.p95)}</p>
+                                    )}
+                                    {hazardUncertainty?.pml && (
+                                      <p><strong>Futuro PML p05/p50/p95:</strong> {formatCurrency(hazardUncertainty.pml.p05)} | {formatCurrency(hazardUncertainty.pml.p50)} | {formatCurrency(hazardUncertainty.pml.p95)}</p>
+                                    )}
+                                  </div>
+                                </div>
+                                <p className="analysis-hint">
+                                  Base: {hazardChange.basis || 'aal'} | Δ {formatNumber(hazardChange.change_percent, 2)}%
+                                </p>
+                                {hazardUncertaintyParams && (
+                                  <p className="analysis-hint">
+                                    Var.: intensidade {Array.isArray(hazardUncertaintyParams.intensity_factor) ? hazardUncertaintyParams.intensity_factor.join(' / ') : (hazardUncertaintyParams.intensity_factor || '-')} |
+                                    {' '}frequência {Array.isArray(hazardUncertaintyParams.frequency_factor) ? hazardUncertaintyParams.frequency_factor.join(' / ') : (hazardUncertaintyParams.frequency_factor || '-')} |
+                                    {' '}limiares {Array.isArray(hazardUncertaintyParams.threshold_factor) ? hazardUncertaintyParams.threshold_factor.join(' / ') : (hazardUncertaintyParams.threshold_factor || '-')}
+                                  </p>
+                                )}
+                              </>
+                            ) : <p className="analysis-hint">Sem estatísticas para este hazard.</p>}
+                          </div>
+
+                          <div className="result-card wide-card">
+                            <h4>Quantis mensais</h4>
+                            <div className="quantile-pair">
+                              {renderQuantileTable(histQuant, 'Histórico', false)}
+                              {renderQuantileTable(futQuant, 'Futuro', false)}
+                            </div>
+                          </div>
+
+                          {(mergedDaily.labels.length > 0
+                            && (
+                              mergedDaily.histMean.some((v) => v !== null)
+                              || mergedDaily.futMean.some((v) => v !== null)
+                              || mergedDaily.histMax.some((v) => v !== null)
+                              || mergedDaily.futMax.some((v) => v !== null)
+                            )) ? (
+                              <div className="result-card wide-card climate-chart-card">
+                                <h4>Série temporal (médias e máximas diárias)</h4>
+                                <Line
+                                  data={{
+                                    labels: mergedDaily.labels,
+                                    datasets: [
+                                      {
+                                        label: 'Histórico - média diária',
+                                        data: mergedDaily.histMean,
+                                        borderColor: '#1d4ed8',
+                                        backgroundColor: 'rgba(29, 78, 216, 0.12)',
+                                        fill: false,
+                                        tension: 0.18,
+                                      },
+                                      {
+                                        label: 'Histórico - máxima diária',
+                                        data: mergedDaily.histMax,
+                                        borderColor: '#1d4ed8',
+                                        borderDash: [5, 4],
+                                        fill: false,
+                                        tension: 0.18,
+                                      },
+                                      {
+                                        label: 'Futuro - média diária',
+                                        data: mergedDaily.futMean,
+                                        borderColor: '#16a34a',
+                                        backgroundColor: 'rgba(22, 163, 74, 0.12)',
+                                        fill: false,
+                                        tension: 0.18,
+                                      },
+                                      {
+                                        label: 'Futuro - máxima diária',
+                                        data: mergedDaily.futMax,
+                                        borderColor: '#16a34a',
+                                        borderDash: [5, 4],
+                                        fill: false,
+                                        tension: 0.18,
+                                      },
+                                    ] as any,
+                                  }}
+                                  options={{ responsive: true, maintainAspectRatio: false, spanGaps: true }}
+                                />
+                              </div>
+                            ) : null}
+                        </div>
+                      );
+                    }))}
+                </section>
               )}
               {result.vulnerability_profile?.hazards && (
                 <div className="result-card">
@@ -906,9 +1270,9 @@ const ClimateRiskPage = () => {
                           {Number(hazardData.stop_loss_factor || 0).toFixed(2)}
                         </p>
                         <p style={{ margin: 0, color: '#334155', fontSize: '0.86rem' }}>
-                          Curva (intensidade → MDD):{' '}
+                          Curva (intensidade -{'>'} MDD):{' '}
                           {intensity
-                            .map((x, idx) => `${Number(x).toFixed(2)}→${Number(mdd[idx] ?? 0).toFixed(2)}`)
+                            .map((x, idx) => `${Number(x).toFixed(2)}->${Number(mdd[idx] ?? 0).toFixed(2)}`)
                             .join(' | ')}
                         </p>
                       </div>

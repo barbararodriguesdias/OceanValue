@@ -20,11 +20,9 @@ from .oceanpact_data_reader import get_netcdf_series, find_netcdf_file
 
 @dataclass
 class HazardConfig:
+    name: str
     code: str
     unit: str
-    variable: str
-    operational_default: float
-    attention_default: float
 
 
 @dataclass
@@ -40,23 +38,9 @@ class AssetVulnerabilityProfile:
 
 
 class ClimadaWindWaveService:
-    """End-to-end wind/wave risk analysis using CLIMADA core objects."""
-
     _CONFIG: Dict[str, HazardConfig] = {
-        "wind": HazardConfig(
-            code="WS",
-            unit="kn",
-            variable="wind",
-            operational_default=15.0,
-            attention_default=20.0,
-        ),
-        "wave": HazardConfig(
-            code="WV",
-            unit="m",
-            variable="hs",
-            operational_default=2.0,
-            attention_default=4.0,
-        ),
+        "wind": HazardConfig(name="wind", code="WND", unit="knots"),
+        "wave": HazardConfig(name="wave", code="WAV", unit="m"),
     }
 
     _ASSET_PROFILES: Dict[str, AssetVulnerabilityProfile] = {
@@ -147,7 +131,6 @@ class ClimadaWindWaveService:
         return self._ASSET_PROFILES.get(key, self._ASSET_PROFILES["platform"])
 
     @staticmethod
-    @staticmethod
     def _exceedance_probs(n: int, method: str = "weibull") -> np.ndarray:
         if n <= 0:
             return np.array([], dtype=float)
@@ -163,6 +146,19 @@ class ClimadaWindWaveService:
             return rank / (n + 1)
 
         # ...existing code for response (sanitized block remains)...
+
+    @staticmethod
+    def _to_serializable(obj):
+        """Recursively cast numpy/scalars to JSON-friendly types."""
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        if isinstance(obj, (np.generic,)):
+            return obj.item()
+        if isinstance(obj, dict):
+            return {k: ClimadaWindWaveService._to_serializable(v) for k, v in obj.items()}
+        if isinstance(obj, (list, tuple)):
+            return [ClimadaWindWaveService._to_serializable(v) for v in obj]
+        return obj
     @staticmethod
     def _build_exposures(lat: float, lon: float, asset_value: float, haz_code: str) -> Exposures:
         impf_column = f"impf_{haz_code}"
@@ -263,7 +259,7 @@ class ClimadaWindWaveService:
 
         return {
             "aal": float(aal_raw),
-            "pml": float(np.nanmax(clean_events)),
+            "pml": float(np.nanmax(clean_events)) if clean_events.size else 0.0,
             "var": float(var_q),
             "tvar": float(tvar_q),
             # ...removed duplicate/old pricing_models block...
@@ -293,15 +289,35 @@ class ClimadaWindWaveService:
         if clean.size == 0:
             clean = np.array([0.0], dtype=float)
 
-        # Build hazard object using CLIMADA's Hazard class (example for wind/wave)
+        # Build hazard/exposure/vulnerability using CLIMADA classes
         from climada.hazard import Hazard, Centroids
         from scipy.sparse import csr_matrix
+
+        n_events = int(clean.size)
+
+        # Estimate event spacing from the time coordinate to derive per-event frequency
+        spacing_hours = 1.0
+        if "time" in series.coords and series["time"].size >= 2:
+            time_vals = pd.to_datetime(series["time"].values)
+            diffs = pd.Series(time_vals).diff().dropna().dt.total_seconds() / 3600.0
+            if not diffs.empty and np.isfinite(diffs.median()):
+                spacing_hours = float(max(diffs.median(), 1e-6))
+
+        total_hours = float(max(spacing_hours * max(n_events, 1), 1e-6))
+        annualization = float(8760.0 / total_hours) if annualization <= 0 else float(annualization)
+        per_event_frequency = float(max(annualization, 1e-9)) / max(n_events, 1)
+
         hazard = Hazard()
         hazard.haz_type = cfg.code
-        hazard.intensity = csr_matrix(clean.reshape(1, -1))
-        hazard.frequency = np.ones(clean.shape, dtype=float) * float(annualization)
+        # CLIMADA expects intensity matrix shaped (n_event, n_centroid); we have 1 centroid.
+        hazard.intensity = csr_matrix(clean.reshape(n_events, 1))
+        hazard.frequency = np.full(n_events, per_event_frequency, dtype=float)
+        hazard.event_id = np.arange(1, n_events + 1, dtype=int)
+        hazard.event_name = np.array([f"event_{i}" for i in range(1, n_events + 1)], dtype=object)
+        hazard.date = np.arange(n_events, dtype=int)
         hazard.units = cfg.unit
         hazard.centroids = Centroids.from_lat_lon([float(lat)], [float(lon)])
+
         exposures = self._build_exposures(lat=lat, lon=lon, asset_value=asset_value, haz_code=cfg.code)
         impf_set = self._build_impact_func_set(
             haz_code=cfg.code,
@@ -312,7 +328,93 @@ class ClimadaWindWaveService:
             stop_loss_factor=hazard_stop_loss_factor,
         )
 
+        # Run native CLIMADA impact; if flat/invalid, rebuild per-event losses from AAL to avoid zeroed outputs
         impact = ImpactCalc(exposures, impf_set, hazard).impact(save_mat=False, assign_centroids=True)
+        raw_at_event = np.asarray(getattr(impact, "at_event", np.array([], dtype=float)), dtype=float)
+
+        # Use CLIMADA frequency when present; otherwise derive evenly across events
+        frequency = np.asarray(getattr(impact, "frequency", np.zeros(n_events)), dtype=float)
+        if not np.isfinite(frequency).any():
+            frequency = np.full(n_events, per_event_frequency, dtype=float)
+
+        max_raw = float(np.nanmax(raw_at_event)) if raw_at_event.size else 0.0
+        min_raw = float(np.nanmin(raw_at_event)) if raw_at_event.size else 0.0
+        spread_raw = max_raw - min_raw
+        is_flat = (
+            raw_at_event.size == 0
+            or not np.isfinite(raw_at_event).any()
+            or max_raw <= 0.0
+            or spread_raw <= max(1e-6, 1e-6 * max_raw)
+        )
+        flat_warning = None
+        if is_flat:
+            flat_warning = (
+                f"CLIMADA impact returned flat/invalid results for {hazard_name}. "
+                "Rebuilt per-event losses from intensity thresholds to restore variability; check units/thresholds."
+            )
+
+            # Manual loss curve (same breakpoints as ImpactFunc) to reintroduce variability
+            stop_max = float(max(attention_max + 1e-6, attention_max * 1.6))
+            intensity_vals = clean
+            mdd = np.zeros_like(intensity_vals, dtype=float)
+            # attention to stop: linear ramp
+            mid_mask = (intensity_vals >= attention_max) & (intensity_vals < stop_max)
+            if np.any(mid_mask):
+                mdd[mid_mask] = hazard_attention_loss_factor + (
+                    (hazard_stop_loss_factor - hazard_attention_loss_factor)
+                    * (intensity_vals[mid_mask] - attention_max)
+                    / max(stop_max - attention_max, 1e-6)
+                )
+            # stop or above
+            mdd[intensity_vals >= stop_max] = hazard_stop_loss_factor
+            # below attention stays zero
+
+            rebuilt_losses = float(max(asset_value, 0.0)) * mdd
+            impact.at_event = np.asarray(rebuilt_losses, dtype=float)
+            raw_at_event = impact.at_event
+
+        # Normalize frequency to annualization/n_events to keep AAL consistent
+        impact.frequency = np.asarray(frequency, dtype=float)
+        impact.aai_agg = float(np.sum(np.asarray(impact.at_event, dtype=float) * np.asarray(impact.frequency, dtype=float)))
+
+        logger = __import__("logging").getLogger(__name__)
+        logger.info(
+            "Impacto calculado | hazard=%s at_event_max=%s at_event_min=%s aai_agg=%s freq_len=%s fallback=%s",
+            hazard_name,
+            float(np.nanmax(raw_at_event)) if raw_at_event.size else 0.0,
+            float(np.nanmin(raw_at_event)) if raw_at_event.size else 0.0,
+            getattr(impact, "aai_agg", None),
+            len(getattr(impact, "frequency", [])),
+            False,
+        )
+
+        status = np.zeros(clean.size, dtype=np.uint8)
+        status[(clean >= operational_max) & (clean < attention_max)] = 1
+        status[clean >= attention_max] = 2
+
+        counts, bin_edges = np.histogram(clean, bins=20)
+        bin_centers = 0.5 * (bin_edges[1:] + bin_edges[:-1])
+
+        # Loss-based exceedance curve per hazard
+        loss_values = np.asarray(impact.at_event, dtype=float)
+        loss_freq = np.asarray(impact.frequency, dtype=float)
+        mask = np.isfinite(loss_values)
+        if mask.any():
+            sort_idx = np.argsort(loss_values[mask])[::-1]
+            sorted_losses = loss_values[mask][sort_idx]
+            sorted_freq = loss_freq[mask][sort_idx] if loss_freq.size == loss_values.size else np.zeros_like(sorted_losses)
+            cum = np.cumsum(sorted_freq)
+            total = float(np.sum(sorted_freq)) if np.isfinite(sorted_freq).any() else 0.0
+            if total <= 0.0:
+                exceedance = self._exceedance_probs(sorted_losses.size, exceedance_method)
+            else:
+                exceedance = 1.0 - np.clip(cum / total, 0.0, 1.0)
+            exceedance_vals = sorted_losses.tolist()
+            exceedance_probs = np.asarray(exceedance, dtype=float).tolist()
+        else:
+            exceedance_vals = []
+            exceedance_probs = []
+
         pricing_summary = self._impact_summary(
             impact,
             risk_quantile=risk_quantile,
@@ -320,16 +422,7 @@ class ClimadaWindWaveService:
             risk_load_method=risk_load_method,
             expense_ratio=expense_ratio,
         )
-
-        status = np.zeros(clean.size, dtype=np.uint8)
-        status = np.where(clean >= attention_max, 2, status)
-        status = np.where((clean >= operational_max) & (clean < attention_max), 1, status)
-
-        counts, bin_edges = np.histogram(clean, bins=20)
-        bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2.0
-        sorted_values = np.sort(clean)[::-1]
-        exceedance = self._exceedance_probs(sorted_values.size, exceedance_method)
-
+        pml_value = float(pricing_summary.get("pml", 0.0))
         return_curve = impact.calc_freq_curve(return_per=[2, 5, 10, 20, 50, 100])
 
         return {
@@ -343,6 +436,7 @@ class ClimadaWindWaveService:
             "attention_max": float(attention_max),
             "attention_loss_factor": float(hazard_attention_loss_factor),
             "stop_loss_factor": float(hazard_stop_loss_factor),
+            "flat_warning": flat_warning,
             "curve_definition": {
                 "intensity": [
                     0.0,
@@ -370,11 +464,12 @@ class ClimadaWindWaveService:
                 "stop_hours": int(np.sum(status == 2)),
             },
             "pricing": pricing_summary,
+            "pml": pml_value,
             "charts": {
                 "hist_bins": bin_centers.tolist(),
                 "hist_counts": counts.astype(int).tolist(),
-                "exceedance_values": sorted_values.tolist(),
-                "exceedance_probs": exceedance.tolist(),
+                "exceedance_values": exceedance_vals,
+                "exceedance_probs": exceedance_probs,
                 "return_period": [float(v) for v in return_curve.return_per],
                 "impact": [float(v) for v in np.asarray(return_curve.impact, dtype=float)],
             },
@@ -384,6 +479,7 @@ class ClimadaWindWaveService:
         self,
         *,
         at_event_by_hazard: Dict[str, np.ndarray],
+        frequency_by_hazard: Dict[str, np.ndarray],
         annualization: float,
         risk_quantile: float,
         risk_load_method: str,
@@ -408,13 +504,21 @@ class ClimadaWindWaveService:
             }
 
         hazard_arrays = list(at_event_by_hazard.values())
-        base_n = hazard_arrays[0].size
-        stacked = np.vstack([arr[:base_n] for arr in hazard_arrays])
-        combined_at_event = np.sum(stacked, axis=0)
+        base_n = min(arr.size for arr in hazard_arrays)
+        stacked_losses = np.vstack([arr[:base_n] for arr in hazard_arrays])
+        stacked_freq = np.vstack([
+            np.asarray(frequency_by_hazard.get(name, np.zeros_like(arr)), dtype=float)[:base_n]
+            for name, arr in at_event_by_hazard.items()
+        ])
+
+        combined_at_event = np.sum(stacked_losses, axis=0)
+        combined_frequency = np.sum(stacked_freq, axis=0)
+        if not np.isfinite(combined_frequency).any():
+            combined_frequency = np.full(base_n, float(max(annualization, 1e-9)) / max(base_n, 1), dtype=float)
 
         combined_impact = Impact()
         combined_impact.at_event = np.asarray(combined_at_event, dtype=float)
-        combined_impact.frequency = np.full(base_n, float(max(annualization, 1e-9)) / base_n, dtype=float)
+        combined_impact.frequency = np.asarray(combined_frequency, dtype=float)
         combined_impact.event_id = np.arange(1, base_n + 1, dtype=int)
         combined_impact.date = np.arange(737000, 737000 + base_n, dtype=int)
         combined_impact.unit = "BRL"
@@ -484,7 +588,16 @@ class ClimadaWindWaveService:
         time_name = netcdf_reader._find_coord(ds, ["time", "t"])
         lat_name = netcdf_reader._find_coord(ds, ["lat", "latitude", "y"])
         lon_name = netcdf_reader._find_coord(ds, ["lon", "longitude", "x"])
-        var_name = "sfcWind_corr" if "sfcWind_corr" in ds.data_vars else "sfcWind"
+        # Suporta variáveis corrigidas e máx: preferir sfcWindmax_corr -> sfcWindmax -> sfcWind_corr -> sfcWind
+        candidates = [
+            "sfcWindmax_corr",
+            "sfcWindmax",
+            "sfcWind_corr",
+            "sfcWind",
+        ]
+        var_name = next((v for v in candidates if v in ds.data_vars), None)
+        if var_name is None:
+            raise ValueError(f"Nenhuma variável de vento encontrada no dataset. Disponíveis: {list(ds.data_vars)}")
 
         point = ds[var_name].sel({lat_name: lat, lon_name: lon}, method="nearest")
         mask = (point[time_name].dt.year >= start_year) & (point[time_name].dt.year <= end_year)
@@ -635,6 +748,13 @@ class ClimadaWindWaveService:
         hist_values = np.asarray(historical.values, dtype=float)
         fut_values = np.asarray(future.values, dtype=float)
 
+        hist_min = float(np.nanmin(hist_values)) if hist_values.size else 0.0
+        hist_mean = float(np.nanmean(hist_values)) if hist_values.size else 0.0
+        hist_max = float(np.nanmax(hist_values)) if hist_values.size else 0.0
+        fut_min = float(np.nanmin(fut_values)) if fut_values.size else 0.0
+        fut_mean = float(np.nanmean(fut_values)) if fut_values.size else 0.0
+        fut_max = float(np.nanmax(fut_values)) if fut_values.size else 0.0
+
         hist_operational, hist_attention, hist_stop = self._classify_counts(
             hist_values, operational_max, attention_max
         )
@@ -650,6 +770,24 @@ class ClimadaWindWaveService:
         hist_monthly = historical.groupby("time.month").mean(skipna=True)
         fut_monthly = future.groupby("time.month").mean(skipna=True)
 
+        def _monthly_quantiles(da: xr.DataArray) -> Dict[str, List[float]]:
+            if da.size == 0 or "time" not in da.coords:
+                return {"p50": [None] * 12, "p90": [None] * 12, "p95": [None] * 12, "p99": [None] * 12}
+            quantiles = [0.5, 0.9, 0.95, 0.99]
+            q_da = da.groupby("time.month").quantile(quantiles, skipna=True)
+            out: Dict[str, List[float]] = {}
+            for q, label in zip(quantiles, ["p50", "p90", "p95", "p99"]):
+                vals = q_da.sel(quantile=q)
+                month_vals = []
+                for month in range(1, 13):
+                    v = vals.sel(month=month).values.item() if month in vals["month"].values else np.nan
+                    month_vals.append(float(v) if np.isfinite(v) else None)
+                out[label] = month_vals
+            return out
+
+        hist_monthly_quant = _monthly_quantiles(historical)
+        fut_monthly_quant = _monthly_quantiles(future)
+
         hist_month_values = {
             int(month): float(value)
             for month, value in zip(np.asarray(hist_monthly["month"].values), np.asarray(hist_monthly.values))
@@ -664,6 +802,7 @@ class ClimadaWindWaveService:
         historical_payload = {
             "samples": int(hist_values[np.isfinite(hist_values)].size),
             metric_key_mean: float(hist_metrics.get("mean", 0.0)),
+            ("min_knots" if hazard_name == "wind" else "min_meters"): hist_min,
             f"p90_{'knots' if hazard_name == 'wind' else 'meters'}": float(hist_metrics.get("p90", 0.0)),
             metric_key_p95: float(hist_metrics.get("p95", 0.0)),
             metric_key_max: float(hist_metrics.get("max", 0.0)),
@@ -675,6 +814,7 @@ class ClimadaWindWaveService:
         future_payload = {
             "samples": int(fut_values[np.isfinite(fut_values)].size),
             metric_key_mean: float(fut_metrics.get("mean", 0.0)),
+            ("min_knots" if hazard_name == "wind" else "min_meters"): fut_min,
             f"p90_{'knots' if hazard_name == 'wind' else 'meters'}": float(fut_metrics.get("p90", 0.0)),
             metric_key_p95: float(fut_metrics.get("p95", 0.0)),
             metric_key_max: float(fut_metrics.get("max", 0.0)),
@@ -708,6 +848,12 @@ class ClimadaWindWaveService:
                 "monthly_labels": [f"{month:02d}" for month in range(1, 13)],
                 f"historical_monthly_{'mean_knots' if hazard_name == 'wind' else 'mean_meters'}": [hist_month_values.get(month) for month in range(1, 13)],
                 f"future_monthly_{'mean_knots' if hazard_name == 'wind' else 'mean_meters'}": [fut_month_values.get(month) for month in range(1, 13)],
+                "historical_time": historical["time"].values.astype(str).tolist() if "time" in historical.coords else [],
+                "historical_values": hist_values[np.isfinite(hist_values)].astype(float).tolist(),
+                "future_time": future["time"].values.astype(str).tolist() if "time" in future.coords else [],
+                "future_values": fut_values[np.isfinite(fut_values)].astype(float).tolist(),
+                "historical_monthly_quantiles": hist_monthly_quant,
+                "future_monthly_quantiles": fut_monthly_quant,
             },
             "climada_graphs": {
                 "historical_return_period_curve": {
@@ -718,9 +864,101 @@ class ClimadaWindWaveService:
                     "return_period": fut_result.get("charts", {}).get("return_period", []),
                     "impact": fut_result.get("charts", {}).get("impact", []),
                 },
+                "historical_loss_exceedance_curve": {
+                    "probability": hist_result.get("charts", {}).get("exceedance_probs", []),
+                    "loss": hist_result.get("charts", {}).get("exceedance_values", []),
+                },
+                "future_loss_exceedance_curve": {
+                    "probability": fut_result.get("charts", {}).get("exceedance_probs", []),
+                    "loss": fut_result.get("charts", {}).get("exceedance_values", []),
+                },
             },
             "pricing_engine": "climada",
             "petals_enabled": True,
+        }
+
+        # Monte Carlo uncertainty using CLIMADA path only
+        mc_runs = 150
+        aal_samples: List[float] = []
+        pml_samples: List[float] = []
+        var_samples: List[float] = []
+        tvar_samples: List[float] = []
+        curve_samples: List[List[float]] = []
+        return_period_axis: List[float] = []
+
+        rng = np.random.default_rng()
+
+        for _ in range(mc_runs):
+            intensity_factor = float(np.clip(rng.lognormal(mean=0.0, sigma=0.1), 0.7, 1.4))
+            freq_factor = float(np.clip(rng.lognormal(mean=0.0, sigma=0.2), 0.3, 3.0))
+            threshold_factor = float(np.clip(rng.normal(loc=1.0, scale=0.1), 0.6, 1.4))
+
+            op_adj = float(operational_max * threshold_factor)
+            att_adj = float(attention_max * threshold_factor)
+            series_adj = future * intensity_factor
+            annual_adj = float(fut_annualization * freq_factor)
+
+            res = self._compute_single_hazard(
+                hazard_name=hazard_name,
+                series=series_adj,
+                lat=lat,
+                lon=lon,
+                asset_value=float(max(asset_value, 1e-6)),
+                annualization=annual_adj,
+                operational_max=op_adj,
+                attention_max=att_adj,
+                hazard_attention_loss_factor=hazard_attention_factor,
+                hazard_stop_loss_factor=hazard_stop_factor,
+                exceedance_method="weibull",
+                risk_quantile=risk_quantile,
+                risk_load_method=risk_load_method,
+                expense_ratio=expense_ratio,
+            )
+
+            pricing_res = res.get("pricing", {}) or {}
+            aal_samples.append(float(pricing_res.get("aal", 0.0)))
+            pml_samples.append(float(pricing_res.get("pml", 0.0)))
+            var_samples.append(float(pricing_res.get("var", 0.0)))
+            tvar_samples.append(float(pricing_res.get("tvar", 0.0)))
+
+            charts = res.get("charts", {}) or {}
+            rp_axis = charts.get("return_period", [])
+            impacts_axis = charts.get("impact", [])
+            if return_period_axis and len(return_period_axis) != len(rp_axis):
+                # Skip inconsistent axes to avoid mixing different shapes
+                continue
+            if not return_period_axis:
+                return_period_axis = list(rp_axis)
+            curve_samples.append([float(v) for v in impacts_axis])
+
+        def _pct(arr: List[float], q: float) -> float:
+            return float(np.nanpercentile(np.asarray(arr, dtype=float), q)) if arr else 0.0
+
+        def _curve_pct(samples: List[List[float]], q: float) -> List[float]:
+            if not samples or not return_period_axis:
+                return []
+            mat = np.asarray(samples, dtype=float)
+            return [float(np.nanpercentile(mat[:, idx], q)) for idx in range(mat.shape[1])]
+
+        response["uncertainty"] = {
+            "parameters": {
+                "intensity_factor": "lognormal mean=0 sigma=0.1 clipped [0.7,1.4]",
+                "frequency_factor": "lognormal mean=0 sigma=0.2 clipped [0.3,3.0]",
+                "threshold_factor": "normal mean=1 sigma=0.1 clipped [0.6,1.4]",
+                "runs": mc_runs,
+            },
+            "future": {
+                "aal": {"p05": _pct(aal_samples, 5), "p50": _pct(aal_samples, 50), "p95": _pct(aal_samples, 95)},
+                "pml": {"p05": _pct(pml_samples, 5), "p50": _pct(pml_samples, 50), "p95": _pct(pml_samples, 95)},
+                "var": {"p05": _pct(var_samples, 5), "p50": _pct(var_samples, 50), "p95": _pct(var_samples, 95)},
+                "tvar": {"p05": _pct(tvar_samples, 5), "p50": _pct(tvar_samples, 50), "p95": _pct(tvar_samples, 95)},
+                "return_period_curve": {
+                    "return_period": return_period_axis,
+                    "p05": _curve_pct(curve_samples, 5),
+                    "p50": _curve_pct(curve_samples, 50),
+                    "p95": _curve_pct(curve_samples, 95),
+                },
+            },
         }
 
         if hazard_name == "wind":
@@ -730,7 +968,7 @@ class ClimadaWindWaveService:
             response["meta"]["operational_max_meters"] = float(operational_max)
             response["meta"]["attention_max_meters"] = float(attention_max)
 
-        return response
+        return self._to_serializable(response)
 
     def analyze_point(
         self,
@@ -753,6 +991,9 @@ class ClimadaWindWaveService:
         period: str = "historico",
         stat: str = "max",
     ) -> Dict:
+        import logging
+
+        logger = logging.getLogger(__name__)
         selected_hazards = [h for h in hazards if h in self._CONFIG]
         if not selected_hazards:
             selected_hazards = ["wind"]
@@ -764,15 +1005,44 @@ class ClimadaWindWaveService:
         series_map = {}
         for hazard in selected_hazards:
             hazard_key = hazard_map.get(hazard, hazard)
-            series = self.get_oceanpact_series(
-                hazard=hazard_key,
-                region=region,
-                period=period,
-                lat=lat,
-                lon=lon,
-            )
-            if series is not None:
-                series_map[hazard] = series
+
+            # Escolhe estatística: vento máx (histórico/preditivo) e onda máx (histórica/preditiva) para risco
+            # Se quisermos média, podemos expor via `stat`, mas aqui focamos em máx para risco operacional/parada
+            stat = "max"
+
+            if hazard == "wind":
+                wind_values = netcdf_reader.get_wind_speed_series(
+                    lat=lat,
+                    lon=lon,
+                    start_time=start_time,
+                    end_time=end_time,
+                    stat=stat,
+                )
+                time_index = np.arange(wind_values.size)
+                series = xr.DataArray(wind_values, coords={"time": time_index}, dims=["time"], attrs={"units": "knots"})
+            else:
+                # Onda: carrega max (hist/pred) em metros
+                wave_values = netcdf_reader.get_point_series(
+                    variable="hs",
+                    lat=lat,
+                    lon=lon,
+                    start_time=start_time,
+                    end_time=end_time,
+                    stat=stat,
+                )
+                time_index = np.arange(wave_values.size)
+                series = xr.DataArray(wave_values, coords={"time": time_index}, dims=["time"], attrs={"units": "m"})
+
+            series_map[hazard] = series
+        logger.info(
+            "Series carregadas", extra={
+                "hazards": list(series_map.keys()),
+                "region": region,
+                "period": period,
+                "lat": lat,
+                "lon": lon,
+            }
+        )
 
         if not series_map:
             raise ValueError("Nenhuma série temporal NetCDF encontrada para os parâmetros informados.")
@@ -780,14 +1050,24 @@ class ClimadaWindWaveService:
         # Alinhar as séries temporais (usando xarray)
         aligned = xr.align(*series_map.values(), join="inner")
         aligned_map = dict(zip(series_map.keys(), aligned))
+        for name, da in aligned_map.items():
+            stats_min = float(np.nanmin(da.values)) if da.size else None
+            stats_max = float(np.nanmax(da.values)) if da.size else None
+            stats_mean = float(np.nanmean(da.values)) if da.size else None
+            logger.info(
+                f"Série alinhada | hazard={name} dims={dict(da.sizes)} coords={list(da.coords)} "
+                f"min={stats_min} max={stats_max} mean={stats_mean}")
 
         event_count = int(aligned[0].size) if aligned else 0
         total_hours = max(float(event_count), 1.0)
         annualization = 8760.0 / total_hours
+        logger.info(
+            f"Séries alinhadas - contagem de eventos={event_count} annualization={annualization}")
 
         hazard_out: Dict[str, Dict] = {}
         status_stack: List[np.ndarray] = []
         at_event_by_hazard: Dict[str, np.ndarray] = {}
+        frequency_by_hazard: Dict[str, np.ndarray] = {}
 
         for hazard_name, data in aligned_map.items():
             cfg = self._CONFIG[hazard_name]
@@ -825,9 +1105,18 @@ class ClimadaWindWaveService:
                 expense_ratio=expense_ratio,
             )
 
+            logger.info(
+                "Resumo hazard | "
+                f"hazard={hazard_name} max={float(np.nanmax(data.values)) if data.size else None} "
+                f"mean={float(np.nanmean(data.values)) if data.size else None} "
+                f"operational_max={operational_max} attention_max={attention_max} "
+                f"operational_hours={int(np.sum(hazard_result['status'] == 0))} "
+                f"attention_hours={int(np.sum(hazard_result['status'] == 1))} "
+                f"stop_hours={int(np.sum(hazard_result['status'] == 2))}")
+
             status_stack.append(np.asarray(hazard_result.pop("status"), dtype=np.uint8))
             at_event_by_hazard[hazard_name] = np.asarray(hazard_result.pop("at_event"), dtype=float)
-            hazard_result.pop("frequency", None)
+            frequency_by_hazard[hazard_name] = np.asarray(hazard_result.get("frequency", []), dtype=float)
             hazard_out[hazard_name] = hazard_result
 
         combined_status = np.maximum.reduce(status_stack) if status_stack else np.array([], dtype=np.uint8)
@@ -840,6 +1129,7 @@ class ClimadaWindWaveService:
 
         combined_impact = self._build_combined_impact(
             at_event_by_hazard=at_event_by_hazard,
+            frequency_by_hazard=frequency_by_hazard,
             annualization=annualization,
             risk_quantile=risk_quantile,
             risk_load_method=risk_load_method,
@@ -847,8 +1137,21 @@ class ClimadaWindWaveService:
         )
 
         combined_events = np.asarray(combined_impact["at_event"], dtype=float)
-        sorted_losses = np.sort(combined_events[np.isfinite(combined_events)])[::-1]
-        exceedance = self._exceedance_probs(sorted_losses.size, exceedance_method)
+        combined_freq = np.asarray(combined_impact.get("frequency", []), dtype=float)
+        clean_mask = np.isfinite(combined_events)
+        sorted_idx = np.argsort(combined_events[clean_mask])[::-1] if clean_mask.any() else np.array([], dtype=int)
+        sorted_losses = combined_events[clean_mask][sorted_idx]
+        sorted_freq = combined_freq[clean_mask][sorted_idx] if combined_freq.size == combined_events.size else np.zeros_like(sorted_losses)
+        # Frequency-based exceedance: running exceedance probability = 1 - cumulative frequency
+        exceedance = []
+        if sorted_losses.size:
+            cum = np.cumsum(sorted_freq)
+            total = float(np.sum(sorted_freq)) if np.isfinite(sorted_freq).any() else 0.0
+            if total <= 0.0:
+                exceedance = self._exceedance_probs(sorted_losses.size, exceedance_method)
+            else:
+                exceedance = 1.0 - np.clip(cum / total, 0.0, 1.0)
+        exceedance_list = np.asarray(exceedance, dtype=float).tolist() if len(np.atleast_1d(exceedance)) else []
 
         hazard_labels = list(hazard_out.keys())
         hazard_aal_values = [float(hazard_out[h]["pricing"].get("aal", 0.0)) for h in hazard_labels]
@@ -877,6 +1180,8 @@ class ClimadaWindWaveService:
                     "operational_max": payload["operational_max"],
                     "attention_max": payload["attention_max"],
                     "impact": payload["pricing"],
+                    "pml": payload.get("pml", 0.0),
+                    "aal": payload.get("pricing", {}).get("aal", 0.0),
                 }
                 for hazard, payload in hazard_out.items()
             },
@@ -884,6 +1189,9 @@ class ClimadaWindWaveService:
             "combined": combined,
             "pricing_models": {
                 "aal": _safe_float_or_dict(pricing.get("aal", 0.0)),
+                "pml": _safe_float_or_dict(pricing.get("pml", 0.0)),
+                "var": _safe_float_or_dict(pricing.get("var", 0.0)),
+                "tvar": _safe_float_or_dict(pricing.get("tvar", 0.0)),
                 "risk_load": _safe_float_or_dict(pricing.get("risk_load", 0.0)),
                 "pure_premium": _safe_float_or_dict(pricing.get("pure_premium", 0.0)),
                 "technical_premium": _safe_float_or_dict(pricing.get("technical_premium", 0.0)),
@@ -903,7 +1211,7 @@ class ClimadaWindWaveService:
                     "impact": combined_impact["impact_curve"],
                 },
                 "loss_exceedance_curve": {
-                    "probability": exceedance.tolist(),
+                    "probability": exceedance_list,
                     "loss": sorted_losses.tolist(),
                 },
                 "hazard_aal_bar": {
@@ -935,7 +1243,7 @@ class ClimadaWindWaveService:
             },
         }
 
-        return response
+        return self._to_serializable(response)
 
     def get_oceanpact_series(self, hazard: str, region: str, period: str, lat: float, lon: float):
         """
