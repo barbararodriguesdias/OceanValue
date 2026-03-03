@@ -1,17 +1,15 @@
 .header {
   background: var(--brand-primary);
   color: var(--text-on-primary);
-  padding: 1rem 2rem;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   z-index: 100;
-  padding: 12px 24px;
+  padding: 15px 24px 15px 70px;
 }
 
 .header-content {
-  max-width: 1400px;
-  margin: 0 auto;
+  width: 100%;
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-start;
   align-items: center;
   gap: 2rem;
 }
@@ -21,8 +19,12 @@
   align-items: center;
   gap: 1rem;
   flex-shrink: 0;
+  transition: opacity 0.2s ease;
 }
 
+.logo-section:hover {
+  opacity: 0.85;
+}
 
 .logo-image {
   height: 50px;
@@ -54,11 +56,9 @@
 .navigation {
   display: flex;
   gap: 2rem;
-  flex: 1;
-  justify-content: center;
   align-items: center;
+  margin-left: auto;
 }
-
 
 .nav-link {
   color: var(--text-on-primary);

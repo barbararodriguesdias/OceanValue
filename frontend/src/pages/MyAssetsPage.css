@@ -1,18 +1,36 @@
 .my-assets-page {
-  padding: 16px;
+  min-height: 100%;
+  width: 100%;
+  padding: 24px;
   color: #0f172a;
+  background: #f1f5f9;
 }
 
-.my-assets-header h2 {
-  margin: 0 0 4px;
+.my-assets-page .page-header {
+  background: var(--brand-primary);
+  color: var(--text-on-primary);
+  border-radius: 12px;
+  padding: 22px 24px;
+  margin-bottom: 20px;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.18);
 }
 
-.my-assets-header p {
-  margin: 0 0 16px;
-  color: #475569;
+.my-assets-page .page-header h1 {
+  margin: 0 0 8px;
+  font-size: 1.7rem;
+  font-weight: 700;
+  color: var(--text-on-primary);
+}
+
+.my-assets-page .page-subtitle {
+  margin: 0;
+  max-width: 900px;
+  color: rgba(248, 250, 252, 0.9);
+  line-height: 1.45;
 }
 
 .my-assets-actions {
+  margin-top: 16px;
   margin-bottom: 12px;
 }
 

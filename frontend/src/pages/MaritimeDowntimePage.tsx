@@ -315,7 +315,7 @@ const MaritimeDowntimePage = () => {
             onClick={handleRunAnalysis}
             disabled={loading || !vesselData.name}
           >
-            {loading ? 'Analisando...' : 'Executar análise de downtime'}
+            {loading ? 'Analisando...' : 'EXECUTAR'}
           </button>
         </section>
 

@@ -2,15 +2,15 @@
 import './Header.css';
 
 interface HeaderProps {
-  activePage?: 'climate-risk' | 'maritime-downtime' | 'assets';
-  onNavigate?: (page: 'climate-risk' | 'maritime-downtime' | 'assets') => void;
+  activePage?: 'map' | 'analysis' | 'assets' | 'maritime-downtime' | 'climate-risk';
+  onNavigate?: (page: 'map' | 'analysis' | 'assets' | 'maritime-downtime' | 'climate-risk') => void;
 }
 
 const Header: React.FC<HeaderProps> = ({ activePage, onNavigate }) => {
   return (
     <header className="header">
       <div className="header-content">
-        <div className="logo-section">
+        <div className="logo-section" onClick={() => onNavigate?.('climate-risk')} style={{ cursor: 'pointer' }}>
           <img src="/oceanpact-logo.png" alt="OceanPact Logo" className="logo-image" style={{ marginRight: '18px', height: '40px' }} />
           <div className="logo-text">
             <h1 className="logo">OceanValue</h1>
@@ -29,7 +29,7 @@ const Header: React.FC<HeaderProps> = ({ activePage, onNavigate }) => {
           <button
             className={`nav-link ${activePage === 'maritime-downtime' ? 'active' : ''}`}
             onClick={() => onNavigate?.('maritime-downtime')}
-            title="Downtime Marítimo"
+            title="Análise de Downtime Operacional de Embarcações"
             style={{ fontWeight: 700 }}
           >
             Downtime Marítimo

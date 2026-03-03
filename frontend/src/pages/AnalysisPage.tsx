@@ -189,7 +189,7 @@ const AnalysisPage = () => {
             onClick={handleRunAnalysis}
             disabled={loading}
           >
-            {loading ? 'Analisando...' : 'Executar análise de risco climático'}
+            {loading ? 'Analisando...' : 'EXECUTAR'}
           </button>
         </section>
 

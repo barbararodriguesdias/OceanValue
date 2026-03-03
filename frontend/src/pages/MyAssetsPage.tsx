@@ -63,23 +63,30 @@ const MyAssetsPage: React.FC<MyAssetsPageProps> = ({ assets, onRemoveAsset, onCl
 
   return (
     <div className="my-assets-page">
-      <header className="my-assets-header">
-        <h2>Meus Ativos</h2>
-        <p>Consultas rápidas das análises salvas (vento/onda e impactos financeiros).</p>
+      <header className="page-header">
+        <h1>Meus Ativos</h1>
+        <p className="page-subtitle">Consultas rápidas das análises salvas (vento/onda e impactos financeiros)</p>
       </header>
 
-      <section className="my-assets-actions">
-        <button className="my-assets-clear" onClick={onClearAssets} disabled={assets.length === 0}>
-          Limpar lista
-        </button>
-      </section>
-
       {assets.length === 0 ? (
-        <div className="my-assets-empty">
-          <p>Nenhum ativo salvo ainda. Faça uma análise e clique em "Salvar em Meus Ativos".</p>
-        </div>
+        <>
+          <div className="my-assets-empty">
+            <p>Nenhum ativo salvo ainda. Faça uma análise e clique em "Salvar em Meus Ativos".</p>
+          </div>
+          <section className="my-assets-actions">
+            <button className="my-assets-clear" onClick={onClearAssets} disabled={assets.length === 0}>
+              Limpar lista
+            </button>
+          </section>
+        </>
       ) : (
-        <section className="my-assets-grid">
+        <>
+          <section className="my-assets-actions">
+            <button className="my-assets-clear" onClick={onClearAssets} disabled={assets.length === 0}>
+              Limpar lista
+            </button>
+          </section>
+          <section className="my-assets-grid">
           {assets.map((asset) => (
             <article key={asset.id} className="my-assets-card">
               <div className="my-assets-card-header">
@@ -162,6 +169,7 @@ const MyAssetsPage: React.FC<MyAssetsPageProps> = ({ assets, onRemoveAsset, onCl
             </article>
           ))}
         </section>
+        </>
       )}
     </div>
   );
